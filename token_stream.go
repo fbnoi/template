@@ -12,12 +12,6 @@ var (
 	TAG_ESCAPE_COMMENT  = [...]string{`@{#`, `#}`}
 	TAG_ESCAPE_BLOCK    = [...]string{`@{%`, `%}`}
 	TAG_ESCAPE_VARIABLE = [...]string{`@{{`, `}}`}
-
-	operator = [...]string{
-		"+", "-", "*", "%", "/",
-		">", "<", ">=", "<=", "==",
-		"or", "and", "is", "in",
-	}
 )
 
 var (
@@ -34,7 +28,7 @@ var (
 	// whitespace
 	reg_whitespace = regexp.MustCompile(`^\s+`)
 	// + - * / > < = and or
-	reg_operator = regexp.MustCompile(`^[\+\-*\/><=:]{1,3}|^(and)|^(or)`)
+	reg_operator = regexp.MustCompile(`^[\+\-*\/><=:]{1,3}|^(and)|^(or)|^(in)`)
 	// name
 	reg_name = regexp.MustCompile(`^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*(\.[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)*`)
 	// number
@@ -173,7 +167,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 			}
 		}
 		if len(brackets) > 0 {
-			return nil, &UnexpectedToken{Line: brackets[0].Line, token: brackets[0].ch}
+			return nil, &UnClosedToken{Line: brackets[0].Line, token: brackets[0].ch}
 		}
 		moveCursor(end)
 		if reg == reg_block {
@@ -245,3 +239,5 @@ func (ts *TokenStream) Peek(n int) (*Token, error) {
 func (ts *TokenStream) IsEOF() bool {
 	return TYPE_EOF == ts.tokens[ts.current].Type()
 }
+
+func (ts *TokenStream) SubStream(start, end int) TokenStream
