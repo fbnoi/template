@@ -27,10 +27,10 @@ var (
 	reg_enter = regexp.MustCompile(`(\r\n|\n)`)
 	// whitespace
 	reg_whitespace = regexp.MustCompile(`^\s+`)
-	// + - * / > < = and or
-	reg_operator = regexp.MustCompile(`^[\+\-*\/><=:]{1,3}|^(and)|^(or)|^(in)`)
+	// + - * / > < = and or in
+	reg_operator = regexp.MustCompile(`^[\.\+\-*\/><=]{1,3}|^(and)|^(or)|^(in)`)
 	// name
-	reg_name = regexp.MustCompile(`^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*(\.[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)*`)
+	reg_name = regexp.MustCompile(`^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*`)
 	// number
 	reg_number = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?([Ee][\+\-][0-9]+)?`)
 	// punctuation
@@ -210,6 +210,10 @@ type TokenStream struct {
 	current int
 }
 
+func (ts *TokenStream) Len() int {
+	return len(ts.tokens)
+}
+
 func (ts *TokenStream) String() string {
 	return ts.Source.Code
 }
@@ -218,6 +222,7 @@ func (ts *TokenStream) Current() (*Token, error) {
 	if ts.current >= len(ts.tokens) {
 		return nil, &UnexpectedEndOfFile{}
 	}
+
 	return ts.tokens[ts.current-1], nil
 }
 
@@ -226,6 +231,16 @@ func (ts *TokenStream) Next() (*Token, error) {
 	if ts.current >= len(ts.tokens) {
 		return nil, &UnexpectedEndOfFile{}
 	}
+
+	return ts.tokens[ts.current-1], nil
+}
+
+func (ts *TokenStream) Skip(n int) (*Token, error) {
+	ts.current += n + 1
+	if ts.current >= len(ts.tokens) {
+		return nil, &UnexpectedEndOfFile{}
+	}
+
 	return ts.tokens[ts.current-1], nil
 }
 
@@ -237,7 +252,17 @@ func (ts *TokenStream) Peek(n int) (*Token, error) {
 }
 
 func (ts *TokenStream) IsEOF() bool {
+	if len(ts.tokens) == 0 || ts.current >= len(ts.tokens) {
+		return true
+	}
+
 	return TYPE_EOF == ts.tokens[ts.current].Type()
 }
 
-func (ts *TokenStream) SubStream(start, end int) TokenStream
+func (ts *TokenStream) SubStream(start, end int) *TokenStream {
+	return &TokenStream{Source: ts.Source, tokens: ts.tokens[start:end]}
+}
+
+func (ts *TokenStream) CurrentIndex() int {
+	return ts.current
+}
