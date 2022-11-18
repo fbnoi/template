@@ -3,6 +3,7 @@ package template
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 var (
@@ -27,14 +28,14 @@ var (
 	reg_enter = regexp.MustCompile(`(\r\n|\n)`)
 	// whitespace
 	reg_whitespace = regexp.MustCompile(`^\s+`)
-	// + - * / > < = and or in
-	reg_operator = regexp.MustCompile(`^[\.\+\-*\/><=]{1,3}|^(and)|^(or)|^(in)`)
+	// . + - * / > < = ! and or not in
+	reg_operator = regexp.MustCompile(`^[\!\.\+\-*\/><=]{1,3}|^(and)|^(or)|^(not)|^(in)`)
 	// name
 	reg_name = regexp.MustCompile(`^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*`)
 	// number
 	reg_number = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?([Ee][\+\-][0-9]+)?`)
-	// punctuation
-	reg_punctuation   = regexp.MustCompile(`^[\(\)\[\]\{\}\?\:;,\|]`)
+	// punctuation () [] {} , |
+	reg_punctuation   = regexp.MustCompile(`^[\(\)\[\]\{\}\?,\|]`)
 	reg_bracket_open  = regexp.MustCompile(`^[\{\[\(]$`)
 	reg_bracket_close = regexp.MustCompile(`^[\}\]\)]$`)
 	// string
@@ -44,12 +45,12 @@ var (
 func Tokenize(source *Source) (*TokenStream, error) {
 	var (
 		code     = reg_enter.ReplaceAllString(source.Code, "\n")
-		stream   = &TokenStream{Source: source, current: 0}
+		stream   = &TokenStream{Source: source, current: -1}
 		poss     = reg_token_start.FindAllStringIndex(code, -1)
 		cursor   = 0
 		line     = 0
 		posIndex = 0
-		end      = len(code)
+		codeLen  = len(code)
 	)
 
 	moveCursor := func(n int) {
@@ -122,7 +123,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 			return nil, &UnClosedToken{Line: line, token: TAG_BLOCK[0]}
 		}
 		length := ends[1] - ends[0]
-		end = cursor + ends[0]
+		end := cursor + ends[0]
 		var brackets []*Bracket
 		for cursor < end {
 			if sPos := reg_whitespace.FindStringIndex(code[cursor:end]); sPos != nil {
@@ -181,9 +182,9 @@ func Tokenize(source *Source) (*TokenStream, error) {
 		posIndex++
 	}
 
-	if cursor < end {
-		stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:end], line))
-		moveCursor(end)
+	if cursor < codeLen {
+		stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:codeLen], line))
+		moveCursor(codeLen)
 	}
 
 	stream.tokens = append(stream.tokens, newToken(TYPE_EOF, "", line))
@@ -215,7 +216,13 @@ func (ts *TokenStream) Len() int {
 }
 
 func (ts *TokenStream) String() string {
-	return ts.Source.Code
+	sb := &strings.Builder{}
+	for !ts.IsEOF() {
+		t, _ := ts.Next()
+		sb.WriteString(t.value)
+	}
+
+	return sb.String()
 }
 
 func (ts *TokenStream) Current() (*Token, error) {
@@ -223,44 +230,45 @@ func (ts *TokenStream) Current() (*Token, error) {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
-	return ts.tokens[ts.current-1], nil
+	return ts.tokens[ts.current], nil
 }
 
 func (ts *TokenStream) Next() (*Token, error) {
 	ts.current++
-	if ts.current >= len(ts.tokens) {
+	if ts.current > len(ts.tokens)-1 {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
-	return ts.tokens[ts.current-1], nil
+	return ts.tokens[ts.current], nil
 }
 
 func (ts *TokenStream) Skip(n int) (*Token, error) {
-	ts.current += n + 1
+	ts.current += n
 	if ts.current >= len(ts.tokens) {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
-	return ts.tokens[ts.current-1], nil
+	return ts.tokens[ts.current], nil
 }
 
 func (ts *TokenStream) Peek(n int) (*Token, error) {
-	if ts.current+n >= len(ts.tokens) {
+	if ts.current+n >= len(ts.tokens)-1 {
 		return nil, &UnexpectedEndOfFile{}
 	}
+
 	return ts.tokens[ts.current+n], nil
 }
 
 func (ts *TokenStream) IsEOF() bool {
-	if len(ts.tokens) == 0 || ts.current >= len(ts.tokens) {
-		return true
-	}
-
-	return TYPE_EOF == ts.tokens[ts.current].Type()
+	return ts.current != -1 && TYPE_EOF == ts.tokens[ts.current].Type()
 }
 
 func (ts *TokenStream) SubStream(start, end int) *TokenStream {
-	return &TokenStream{Source: ts.Source, tokens: ts.tokens[start:end]}
+	var tokens = make([]*Token, end-start)
+	copy(tokens, ts.tokens[start:end])
+	tokens = append(tokens, newToken(TYPE_EOF, "", ts.tokens[end-1].Line()))
+
+	return &TokenStream{Source: ts.Source, tokens: tokens, current: -1}
 }
 
 func (ts *TokenStream) CurrentIndex() int {

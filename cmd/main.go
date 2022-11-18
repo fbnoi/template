@@ -13,11 +13,13 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	for !stream.IsEOF() {
-		token, err := stream.Next()
-		if err != nil {
-			log.Fatalln(err)
-		}
-		log.Println(token)
-	}
+	doc, err := template.Assemble(stream)
+	log.Println(doc)
+	// for !stream.IsEOF() {
+	// 	token, err := stream.Next()
+	// 	if err != nil {
+	// 		log.Fatalln(err)
+	// 	}
+	// 	log.Println(token)
+	// }
 }

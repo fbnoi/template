@@ -41,6 +41,7 @@ func (s *Source) Overview(line int) (codes []*Line) {
 	for i := startLine; i < endLine; i++ {
 		codes = append(codes, &Line{Num: i, Code: s.Code[pos[i-1][1]:pos[i][0]], Highlight: i == line})
 	}
+
 	return
 }
 
@@ -53,11 +54,13 @@ func NewSourceFile(path string) *Source {
 	if err != nil {
 		panic(err)
 	}
+
 	return &Source{Code: string(bs), Identity: path}
 }
 
 func abstract(content []byte) string {
 	encryptor := sha1.New()
 	encryptor.Write(content)
+
 	return hex.EncodeToString(encryptor.Sum(nil))
 }

@@ -8,23 +8,6 @@ func (p Pos) Position() Pos {
 	return p
 }
 
-type BinaryExprLock struct {
-	worked bool
-	status int
-}
-
-func (bel *BinaryExprLock) isWorked() bool {
-	return bel.worked
-}
-
-func (bel *BinaryExprLock) isLocked() bool {
-	return bel.status == 1
-}
-
-func (bel *BinaryExprLock) Lock() {
-	bel.status = 1
-}
-
 type ASTNode interface {
 }
 
@@ -63,6 +46,10 @@ type (
 		Value string // literal string; e.g. 42, 0x7f, 3.14, 1e-9, 2.4i, 'a', etc.
 	}
 
+	ListExpr struct {
+		List []Expr
+	}
+
 	OpLit struct {
 		Op string // literal string; e.g. + - * /
 	}
@@ -71,20 +58,26 @@ type (
 	IndexExpr struct {
 		X     Expr // expression
 		Index Expr // index expression
+		Op    *OpLit
 	}
 
 	// A CallExpr node represents an expression followed by an argument list.
 	CallExpr struct {
-		Fun  Expr   // function expression
-		Args []Expr // function arguments; or nil
+		Func *Ident    // function expression
+		Args *ListExpr // function arguments; or nil
 	}
 
 	// A BinaryExpr node represents a binary expression.
 	BinaryExpr struct {
-		X      Expr   // left operand
-		Op     *OpLit // operator
-		Y      Expr   // right operand
-		locker *BinaryExprLock
+		X  Expr   // left operand
+		Op *OpLit // operator
+		Y  Expr   // right operand
+	}
+
+	// A Single node represents a single expression.
+	SingleExpr struct {
+		X  Expr   // expr
+		Op *OpLit // operator
 	}
 )
 
@@ -93,10 +86,12 @@ type (
 //
 func (*Ident) exprNode()      {}
 func (*BasicLit) exprNode()   {}
+func (*ListExpr) exprNode()   {}
 func (*OpLit) exprNode()      {}
 func (*IndexExpr) exprNode()  {}
 func (*CallExpr) exprNode()   {}
 func (*BinaryExpr) exprNode() {}
+func (*SingleExpr) exprNode() {}
 
 // ----------------------------------------------------------------------------
 // Statements
