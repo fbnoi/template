@@ -15,18 +15,13 @@ type ASTNode interface {
 type Expr interface {
 	ASTNode
 	exprNode()
+	Execute(p *Params) (any, error)
 }
 
 // All statement nodes implement the Direct interface.
 type Direct interface {
 	ASTNode
 	directNode()
-}
-
-// All text nodes implement the Text interface.
-type Text interface {
-	ASTNode
-	textNode()
 }
 
 type AppendAble interface {
