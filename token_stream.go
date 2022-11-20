@@ -211,7 +211,7 @@ type TokenStream struct {
 	current int
 }
 
-func (ts *TokenStream) Len() int {
+func (ts *TokenStream) Size() int {
 	return len(ts.tokens)
 }
 
@@ -231,6 +231,12 @@ func (ts *TokenStream) Current() (*Token, error) {
 	}
 
 	return ts.tokens[ts.current], nil
+}
+
+func (ts *TokenStream) HasNext() bool {
+	size := len(ts.tokens)
+
+	return ts.current < size-1
 }
 
 func (ts *TokenStream) Next() (*Token, error) {

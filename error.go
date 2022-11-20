@@ -2,6 +2,10 @@ package template
 
 import "fmt"
 
+func newUnexpectedToken(token *Token) error {
+	return &UnexpectedToken{Line: token.Line(), token: token.Value()}
+}
+
 type UnexpectedEndOfFile struct {
 }
 

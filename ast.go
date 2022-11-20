@@ -145,12 +145,14 @@ type (
 	}
 
 	IncludeDirect struct {
-		Ident  *BasicLit       // string of block name
-		Params []*AssignDirect // parameters injected into block
+		Ident  *BasicLit      // string of block name
+		Params map[string]any // parameters injected into block
+		Doc    *Document
 	}
 
 	ExtendDirect struct {
 		Ident *BasicLit // string of block name
+		Doc   *Document
 	}
 )
 

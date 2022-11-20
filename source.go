@@ -49,13 +49,13 @@ func NewSource(code string) *Source {
 	return &Source{Code: code, Identity: abstract([]byte(code))}
 }
 
-func NewSourceFile(path string) *Source {
+func NewSourceFile(path string) (*Source, error) {
 	bs, err := ioutil.ReadFile(path)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return &Source{Code: string(bs), Identity: path}
+	return &Source{Code: string(bs), Identity: path}, nil
 }
 
 func abstract(content []byte) string {
