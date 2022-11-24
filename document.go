@@ -48,7 +48,7 @@ type Document struct {
 
 func (doc *Document) Block(name string) *BlockDirect {
 	for _, br := range doc.Body.List {
-		if b, ok := br.(*BlockDirect); ok && b.Name.Value == name {
+		if b, ok := br.(*BlockDirect); ok && b.Name.Value.Value() == name {
 			return b
 		}
 	}
@@ -58,7 +58,7 @@ func (doc *Document) Block(name string) *BlockDirect {
 
 func (doc *Document) Execute(data any) (string, error) {
 	if doc.Extend != nil {
-		if pDoc := _store.Doc(doc.Extend.Ident.Value); pDoc != nil {
+		if pDoc := _store.Doc(doc.Extend.Path.Value.Value()); pDoc != nil {
 			return pDoc.executeWithTpl(data, doc)
 		}
 	}
@@ -74,11 +74,21 @@ func (doc *Document) executeWithTpl(data any, xDoc *Document) (string, error) {
 	return "", nil
 }
 
-func (*Document) directNode() {}
-
 func (doc *Document) Append(x Direct) {
 	if doc.Body == nil {
 		doc.Body = &SectionDirect{}
 	}
 	doc.Body.List = append(doc.Body.List, x)
+}
+
+func (*Document) directNode() {}
+
+func (d *Document) Validate() error {
+	if d.Extend != nil {
+		if err := d.Extend.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return d.Body.Validate()
 }

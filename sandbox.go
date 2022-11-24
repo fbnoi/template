@@ -99,8 +99,8 @@ func compare(op1, op2 string) bool {
 	return rank[op1] < rank[op2]
 }
 
-func allowOp(token *Token) bool {
-	_, ok := rank[token.Value()]
+func allowOp(op *Token) bool {
+	_, ok := rank[op.Value()]
 
 	return ok
 }
@@ -137,7 +137,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 			return nil
 
 		case TYPE_TEXT:
-			node := &TextDirect{Text: &BasicLit{Kind: TYPE_STRING, Value: token.Value()}}
+			node := &TextDirect{Text: &BasicLit{Kind: TYPE_STRING, Value: token}}
 			sb.cursor.Append(node)
 
 		case TYPE_VAR_START:
@@ -184,7 +184,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				if token.Type() != TYPE_STRING {
 					return newUnexpectedToken(token)
 				}
-				node.Ident = &BasicLit{Kind: token.Type(), Value: token.Value()}
+				node.Path = &BasicLit{Kind: token.Type(), Value: token}
 				if baseDoc, err := BuildFileTemplate(token.Value()); err != nil {
 					return err
 				} else {
@@ -197,12 +197,12 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 
 			case "include":
-				node := &IncludeDirect{Params: make(map[string]any)}
+				node := &IncludeDirect{Params: make(Params)}
 				token, _ := stream.Next()
 				if token.Type() != TYPE_STRING {
 					return newUnexpectedToken(token)
 				}
-				node.Ident = &BasicLit{Kind: token.Type(), Value: token.Value()}
+				node.Path = &BasicLit{Kind: token.Type(), Value: token}
 				if baseDoc, err := BuildFileTemplate(token.Value()); err != nil {
 					return err
 				} else {
@@ -230,7 +230,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				if token.Type() != TYPE_NAME {
 					return newUnexpectedToken(token)
 				}
-				node := &BlockDirect{Name: &BasicLit{Kind: TYPE_STRING, Value: token.Value()}}
+				node := &BlockDirect{Name: &BasicLit{Kind: TYPE_STRING, Value: token}}
 				sb.pushStack(node)
 
 			case "set":
@@ -239,7 +239,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				if token.Type() != TYPE_NAME {
 					return newUnexpectedToken(token)
 				}
-				node.Lh = &Ident{Name: token.Value()}
+				node.Lh = &Ident{Name: token}
 
 				token, _ = stream.Next()
 				if token.Value() != "=" {
@@ -322,11 +322,11 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 				pTok, _ := stream.Peek(1)
 				if pTok.Value() != "," {
-					node.Value = &Ident{Name: token.Value()}
+					node.Value = &Ident{Name: token}
 				} else {
-					node.Key = &Ident{Name: token.Value()}
+					node.Key = &Ident{Name: token}
 					token, _ = stream.Skip(1)
-					node.Value = &Ident{Name: token.Value()}
+					node.Value = &Ident{Name: token}
 				}
 				token, _ = stream.Next()
 				if token.Value() != "in" {
@@ -352,6 +352,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 
 			default:
 				return newUnexpectedToken(token)
+
 			}
 		}
 	}
@@ -393,14 +394,14 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 		token, _ := stream.Next()
 		switch token.Type() {
 		case TYPE_NUMBER, TYPE_STRING:
-			b := &BasicLit{Kind: token.Type(), Value: token.value}
+			b := &BasicLit{Kind: token.Type(), Value: token}
 			esb.exprStack = append(esb.exprStack, b)
 
 		case TYPE_NAME:
 			if strings.Contains(internalKeyWords, fmt.Sprintf("_%s_", token.Value())) {
 				return newUnexpectedToken(token)
 			}
-			i := &Ident{Name: token.Value()}
+			i := &Ident{Name: token}
 			if !stream.IsEOF() {
 				if nextToken, err := stream.Peek(1); err == nil && nextToken.Value() == "(" {
 					c := &CallExpr{Func: i}
@@ -471,8 +472,10 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 					topOp = esb.opStack[len(esb.opStack)-1]
 				}
 				esb.mergeExprStack(token)
+
 			default:
 				return newUnexpectedToken(token)
+
 			}
 		case TYPE_EOF:
 		default:
@@ -507,18 +510,17 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 	if len(esb.exprStack) < 2 {
 		return newUnexpectedToken(token)
 	}
-	op := &OpLit{Op: token.Value()}
-
 	switch token.Value() {
 	case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or":
 		expr1 := esb.exprStack[len(esb.exprStack)-2]
 		expr2 := esb.exprStack[len(esb.exprStack)-1]
 		esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
-		b := &BinaryExpr{X: expr1, Op: op, Y: expr2}
+		b := &BinaryExpr{X: expr1, Op: token, Y: expr2}
 		esb.exprStack = append(esb.exprStack, b)
+
 	case "not", "++", "--":
 		expr1 := esb.exprStack[len(esb.exprStack)-1]
-		expr1 = &SingleExpr{X: expr1, Op: op}
+		expr1 = &SingleExpr{X: expr1, Op: token}
 
 	case "[", ".":
 		expr1 := esb.exprStack[len(esb.exprStack)-2]
@@ -527,8 +529,9 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 		if _, ok := expr1.(*Ident); !ok {
 			return newUnexpectedToken(token)
 		}
-		i := &IndexExpr{X: expr1, Op: op, Index: expr2}
+		i := &IndexExpr{X: expr1, Op: token, Index: expr2}
 		esb.exprStack = append(esb.exprStack, i)
+
 	case ",":
 		expr1 := esb.exprStack[len(esb.exprStack)-1]
 		expr2 := esb.exprStack[len(esb.exprStack)-2]
@@ -540,6 +543,7 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 			list.List = append(list.List, expr1)
 			esb.exprStack[len(esb.exprStack)-1] = list
 		}
+
 	case ")":
 		expr1 := esb.exprStack[len(esb.exprStack)-1]
 		expr2 := esb.exprStack[len(esb.exprStack)-2]
@@ -555,8 +559,10 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 			fn.Args = list
 			esb.exprStack = esb.exprStack[:len(esb.exprStack)-1]
 		}
+
 	default:
 		return newUnexpectedToken(token)
+
 	}
 
 	return nil
