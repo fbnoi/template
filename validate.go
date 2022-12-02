@@ -9,15 +9,17 @@ import (
 var (
 
 	// expr type
-	identType      = reflect.TypeOf(&Ident{})
-	indexExprType  = reflect.TypeOf(&IndexExpr{})
-	ListExprType   = reflect.TypeOf(&ListExpr{})
-	callExprType   = reflect.TypeOf(&CallExpr{})
-	binaryExprType = reflect.TypeOf(&BinaryExpr{})
+	identType      = reflect.TypeOf(&Ident{}).Elem()
+	indexExprType  = reflect.TypeOf(&IndexExpr{}).Elem()
+	ListExprType   = reflect.TypeOf(&ListExpr{}).Elem()
+	callExprType   = reflect.TypeOf(&CallExpr{}).Elem()
+	binaryExprType = reflect.TypeOf(&BinaryExpr{}).Elem()
 
 	//direct type
-	sectionDirectType = reflect.TypeOf(&SectionDirect{})
-	ifDirectType      = reflect.TypeOf(&IfDirect{})
+	sectionDirectType = reflect.TypeOf(&SectionDirect{}).Elem()
+	blockDirectType   = reflect.TypeOf(&BlockDirect{}).Elem()
+	ifDirectType      = reflect.TypeOf(&IfDirect{}).Elem()
+	extendDirectType  = reflect.TypeOf(&ExtendDirect{}).Elem()
 )
 
 // ----------------------------------------------------------------------------
@@ -116,14 +118,21 @@ func (d *IfDirect) Validate() error {
 		return exprValidateError(d.Cond)
 	}
 
+	for _, v := range d.Body.List {
+		if isType(v, blockDirectType, extendDirectType, sectionDirectType) {
+			return errors.Errorf("expected %s", d.Else.Type())
+		}
+	}
+
 	if err := reportValidateError(d.Cond.Validate, d.Body.Validate); err != nil {
 		return err
 	}
 
 	if d.Else != nil {
 		if !isType(d.Else, ifDirectType, sectionDirectType) {
-			return errors.New("expected else")
+			return errors.Errorf("expected %s", d.Else.Type())
 		}
+
 		return d.Else.Validate()
 	}
 
@@ -141,6 +150,12 @@ func (d *ForDirect) Validate() error {
 		return exprValidateError(d.X)
 	}
 
+	for _, v := range d.Body.List {
+		if isType(v, blockDirectType, extendDirectType, sectionDirectType) {
+			return errors.Errorf("expected %s", v.Type())
+		}
+	}
+
 	if err := reportValidateError(d.Value.Validate, d.X.Validate); err != nil {
 		return err
 	}
@@ -149,6 +164,12 @@ func (d *ForDirect) Validate() error {
 }
 
 func (d *BlockDirect) Validate() error {
+	for _, v := range d.Body.List {
+		if isType(v, extendDirectType, sectionDirectType) {
+			return errors.Errorf("expected %s", v.Type())
+		}
+	}
+
 	return reportValidateError(d.Name.Validate, d.Body.Validate)
 }
 
@@ -162,12 +183,12 @@ func (d *IncludeDirect) Validate() error {
 	}
 
 	for _, v := range d.Doc.Body.List {
-		if err := v.Validate(); err != nil {
-			return nil
+		if isType(v, blockDirectType, extendDirectType, sectionDirectType) {
+			return errors.Errorf("expected %s", v.Type())
 		}
 	}
 
-	return nil
+	return d.Doc.Body.Validate()
 }
 
 func (d *ExtendDirect) Validate() error {
@@ -176,12 +197,12 @@ func (d *ExtendDirect) Validate() error {
 	}
 
 	for _, v := range d.Doc.Body.List {
-		if err := v.Validate(); err != nil {
-			return nil
+		if isType(v, extendDirectType) {
+			return errors.Errorf("expected %s", v.Type())
 		}
 	}
 
-	return nil
+	return d.Doc.Body.Validate()
 }
 
 func reportValidateError(fns ...func() error) error {

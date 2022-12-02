@@ -3,25 +3,24 @@ package template
 import (
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
-func (e *Ident) Execute(p *Params) (reflect.Value, error) {
+func (e *Ident) Execute(p Params) (reflect.Value, error) {
 	return Get(p, e.Name.Value())
 }
 
-func (e *BasicLit) Execute(*Params) (reflect.Value, error) {
+func (e *BasicLit) Execute(Params) (reflect.Value, error) {
 	vs := e.Value.Value()
 	if e.Kind == TYPE_STRING {
 		return reflect.ValueOf(vs), nil
 	}
-
 	if e.Kind == TYPE_NUMBER {
 		if i, err := strconv.Atoi(vs); err == nil {
 			return reflect.ValueOf(i), nil
 		}
-
 		if f, err := strconv.ParseFloat(vs, 64); err == nil {
 			return reflect.ValueOf(f), nil
 		}
@@ -30,11 +29,11 @@ func (e *BasicLit) Execute(*Params) (reflect.Value, error) {
 	return zeroValue, newUnexpectedToken(e.Value)
 }
 
-func (e *ListExpr) Execute(*Params) (reflect.Value, error) {
+func (e *ListExpr) Execute(Params) (reflect.Value, error) {
 	return zeroValue, nil
 }
 
-func (e *IndexExpr) Execute(p *Params) (reflect.Value, error) {
+func (e *IndexExpr) Execute(p Params) (reflect.Value, error) {
 	x, err := e.X.Execute(p)
 	if err != nil {
 		return zeroValue, err
@@ -72,15 +71,12 @@ func (e *IndexExpr) Execute(p *Params) (reflect.Value, error) {
 		if err != nil {
 			return zeroValue, err
 		}
-
 		if v.CanInt() {
 			return Get(vx, x)
 		}
-
 		if v.Kind() == reflect.String {
 			return Get(vx, v.Interface().(string))
 		}
-
 		return zeroValue, errors.Errorf("con't convert %s(type of %s) to type string",
 			v,
 			reflect.TypeOf(v).Name(),
@@ -91,7 +87,7 @@ func (e *IndexExpr) Execute(p *Params) (reflect.Value, error) {
 	}
 }
 
-func (e *CallExpr) Execute(p *Params) (reflect.Value, error) {
+func (e *CallExpr) Execute(p Params) (reflect.Value, error) {
 	if fn, err := method(reflect.ValueOf(p), e.Func.Name.Value()); err != nil {
 		return zeroValue, err
 	} else {
@@ -108,7 +104,7 @@ func (e *CallExpr) Execute(p *Params) (reflect.Value, error) {
 	}
 }
 
-func (e *BinaryExpr) Execute(p *Params) (reflect.Value, error) {
+func (e *BinaryExpr) Execute(p Params) (reflect.Value, error) {
 	op := e.Op.Value()
 	x, err := e.X.Execute(p)
 	if err != nil {
@@ -144,12 +140,11 @@ func (e *BinaryExpr) Execute(p *Params) (reflect.Value, error) {
 	return zeroValue, newUnexpectedToken(e.Op)
 }
 
-func (e *SingleExpr) Execute(p *Params) (reflect.Value, error) {
+func (e *SingleExpr) Execute(p Params) (reflect.Value, error) {
 	x, err := e.X.Execute(p)
 	if err != nil {
 		return zeroValue, err
 	}
-
 	switch e.Op.Value() {
 	case "not":
 		r := x.IsZero()
@@ -158,4 +153,160 @@ func (e *SingleExpr) Execute(p *Params) (reflect.Value, error) {
 	}
 
 	return zeroValue, newUnexpectedToken(e.Op)
+}
+
+func (d *TextDirect) Execute(p Params) (string, error) {
+	return d.Text.Value.value, nil
+}
+
+func (d *ValueDirect) Execute(p Params) (string, error) {
+	if v, err := d.Tok.Execute(p); err != nil {
+		return "", err
+	} else {
+		return strValue(v)
+	}
+}
+
+func (d *AssignDirect) Execute(p Params) (string, error) {
+	yx, err := d.Rh.Execute(p)
+	if err != nil {
+		return "", err
+	}
+	p[d.Lh.Name.value] = yx
+
+	return "", nil
+}
+
+func (d *SectionDirect) Execute(p Params) (string, error) {
+	sb := &strings.Builder{}
+	for _, x := range d.List {
+		if str, err := x.Execute(p); err != nil {
+			return "", err
+		} else {
+			sb.WriteString(str)
+		}
+	}
+
+	return sb.String(), nil
+}
+
+func (d *IfDirect) Execute(p Params) (string, error) {
+	if conv, err := d.Cond.Execute(p); err != nil {
+		return "", err
+	} else {
+		conv = uncoverInterface(conv)
+		if conv.IsNil() || conv.IsZero() {
+			if d.Else != nil {
+				return d.Else.Execute(p)
+			}
+
+			return "", nil
+		} else {
+			return d.Body.Execute(p)
+		}
+	}
+}
+
+func (d *ForDirect) Execute(p Params) (string, error) {
+	if v, err := d.X.Execute(p); err != nil {
+		return "", nil
+	} else {
+		sb := &strings.Builder{}
+		v = uncoverInterface(v)
+		switch v.Kind() {
+		case reflect.Map:
+			iter := v.MapRange()
+			for iter.Next() {
+				np := p.copy()
+				if d.Key != nil {
+					np[d.Key.Name.value] = iter.Key()
+				}
+				np[d.Key.Name.value] = iter.Value()
+				if str, err := d.Body.Execute(np); err != nil {
+					return "", err
+				} else {
+					sb.WriteString(str)
+				}
+			}
+
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < v.Len(); i++ {
+				np := p.copy()
+				if d.Key != nil {
+					np[d.Key.Name.value] = i
+				}
+				np[d.Key.Name.value] = v.Index(i)
+				if str, err := d.Body.Execute(np); err != nil {
+					return "", err
+				} else {
+					sb.WriteString(str)
+				}
+			}
+
+		default:
+			return "", errors.Errorf("can't iter type %s", v.Type())
+		}
+
+		return sb.String(), nil
+	}
+}
+
+func (d *BlockDirect) Execute(p Params) (string, error) {
+	sb := &strings.Builder{}
+	for _, v := range d.Body.List {
+		if str, err := v.Execute(p); err != nil {
+			return "", err
+		} else {
+			sb.WriteString(str)
+		}
+	}
+
+	return sb.String(), nil
+}
+
+func (d *IncludeDirect) Execute(p Params) (string, error) {
+	if d.Params != nil {
+		if pv, err := d.Params.Execute(p); err != nil {
+			return "", err
+		} else if pv.CanConvert(reflect.TypeOf(make(Params))) {
+			np := pv.Convert(reflect.TypeOf(make(Params)))
+
+			return d.Doc.Body.Execute(np.Interface().(Params))
+		}
+	}
+
+	return d.Doc.Body.Execute(p)
+}
+
+func (d *ExtendDirect) Execute(p Params) (string, error) {
+	panic("unreachable")
+}
+
+func (d *SetDirect) Execute(p Params) (string, error) {
+	return d.Assign.Execute(p)
+}
+
+func strValue(v reflect.Value) (string, error) {
+	v = uncoverInterface(v)
+	kind := v.Kind()
+	if isInt(kind) {
+		return strconv.Itoa(int(v.Int())), nil
+	}
+	if isUint(kind) {
+		return strconv.Itoa(int(v.Uint())), nil
+	}
+	if isFloat(kind) {
+		return strconv.FormatFloat(v.Float(), 'f', -1, 64), nil
+	}
+	if kind == reflect.String {
+		return v.String(), nil
+	}
+	if kind == reflect.Bool {
+		if vi := v.Bool(); vi {
+			return "true", nil
+		}
+		return "false", nil
+	}
+
+	return "", errors.Errorf("can't convert type %s to string", v.Type())
 }

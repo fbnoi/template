@@ -1,6 +1,7 @@
 package template
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -12,6 +13,10 @@ var (
 		locker: &sync.RWMutex{},
 	}
 )
+
+func NewDocument() *Document {
+	return &Document{blocks: make(map[string]*BlockDirect)}
+}
 
 type Documents struct {
 	store  map[string]*Document
@@ -44,33 +49,43 @@ func (docs *Documents) Doc(name string) *Document {
 type Document struct {
 	Extend *ExtendDirect
 	Body   *SectionDirect
+	blocks map[string]*BlockDirect
+
+	extended bool
 }
 
 func (doc *Document) Block(name string) *BlockDirect {
-	for _, br := range doc.Body.List {
-		if b, ok := br.(*BlockDirect); ok && b.Name.Value.Value() == name {
-			return b
-		}
+	if block, ok := doc.blocks[name]; ok {
+		return block
 	}
 
 	return nil
 }
 
-func (doc *Document) Execute(data any) (string, error) {
+// TODO: walk
+func (doc *Document) Execute(p Params) (string, error) {
+	sb := &strings.Builder{}
+	nd := doc
 	if doc.Extend != nil {
-		if pDoc := _store.Doc(doc.Extend.Path.Value.Value()); pDoc != nil {
-			return pDoc.executeWithTpl(data, doc)
+		nd = doc.Extend.Doc
+	}
+	for _, v := range nd.Body.List {
+		if bv, ok := v.(*BlockDirect); ok {
+			if b := doc.Block(bv.Name.Value.value); b != nil {
+				v = b
+			}
+		}
+		if str, err := v.Execute(p); err != nil {
+			return "", err
+		} else {
+			sb.WriteString(str)
 		}
 	}
 
-	return doc.execute(data)
+	return doc.execute(p)
 }
 
-func (doc *Document) execute(data any) (string, error) {
-	return "", nil
-}
-
-func (doc *Document) executeWithTpl(data any, xDoc *Document) (string, error) {
+func (doc *Document) execute(p Params) (string, error) {
 	return "", nil
 }
 
@@ -80,8 +95,6 @@ func (doc *Document) Append(x Direct) {
 	}
 	doc.Body.List = append(doc.Body.List, x)
 }
-
-func (*Document) directNode() {}
 
 func (d *Document) Validate() error {
 	if d.Extend != nil {
