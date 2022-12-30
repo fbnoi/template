@@ -31,13 +31,13 @@ var (
 	internalKeyWords = "_block_endblock_set_if_elseif_else_endif_for_endfor_extend_include_in_and_or_not_with_"
 
 	sandboxPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return &sandbox{}
 		},
 	}
 
 	exprSandboxPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return &exprSandbox{}
 		},
 	}
