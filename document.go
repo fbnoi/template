@@ -62,7 +62,6 @@ func (doc *Document) Block(name string) *BlockDirect {
 	return nil
 }
 
-// TODO: walk
 func (doc *Document) Execute(p Params) (string, error) {
 	sb := &strings.Builder{}
 	nd := doc

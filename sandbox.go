@@ -55,17 +55,23 @@ func BuildTemplate(content string) (*Document, error) {
 	return buildSource(source)
 }
 
-func BuildFileTemplate(path string) (*Document, error) {
-	var (
-		source *Source
-		err    error
-	)
+func BuildFileTemplate(path string) (doc *Document, err error) {
+	if doc = _store.Doc(path); doc != nil {
+		return
+	}
+	var source *Source
 	source, err = NewSourceFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return buildSource(source)
+	doc, err = buildSource(source)
+	if err != nil {
+		return
+	}
+	_store.AddDoc(path, doc)
+
+	return
 }
 
 func buildSource(source *Source) (*Document, error) {
