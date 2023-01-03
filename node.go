@@ -266,7 +266,7 @@ func (e *CallExpr) Literal() string {
 	return fmt.Sprintf("%s(%s)", e.Func.Literal(), e.Args.Literal())
 }
 func (e *BinaryExpr) Literal() string {
-	return fmt.Sprintf("%s%s%s", e.X.Literal(), e.Op.value, e.Y.Literal())
+	return fmt.Sprintf("%s %s %s", e.X.Literal(), e.Op.value, e.Y.Literal())
 }
 func (e *SingleExpr) Literal() string {
 	return fmt.Sprintf("%s %s", e.Op.value, e.X.Literal())

@@ -261,6 +261,13 @@ func (d *BlockDirect) Execute(p Params) (string, error) {
 		}
 	}
 
+	if b := p.getBlock(d.Name.Value.value); b != nil && b != d {
+		np := p.copy()
+		np.setBlockRemains(sb.String())
+
+		return b.Execute(np)
+	}
+
 	return sb.String(), nil
 }
 

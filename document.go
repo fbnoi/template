@@ -68,13 +68,11 @@ func (doc *Document) Execute(p Params) (string, error) {
 	nd := doc
 	if doc.Extend != nil {
 		nd = doc.Extend.Doc
+		for n, b := range doc.blocks {
+			p.setBlock(n, b)
+		}
 	}
 	for _, v := range nd.Body.List {
-		if bv, ok := v.(*BlockDirect); ok {
-			if b := doc.Block(bv.Name.Value.value); b != nil {
-				v = b
-			}
-		}
 		if str, err := v.Execute(p); err != nil {
 			return "", err
 		} else {
@@ -82,11 +80,7 @@ func (doc *Document) Execute(p Params) (string, error) {
 		}
 	}
 
-	return doc.execute(p)
-}
-
-func (doc *Document) execute(p Params) (string, error) {
-	return "", nil
+	return sb.String(), nil
 }
 
 func (doc *Document) Append(x Direct) {
