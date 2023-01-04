@@ -56,7 +56,7 @@ func BuildTemplate(content string) (*Document, error) {
 }
 
 func BuildFileTemplate(path string) (doc *Document, err error) {
-	if doc = _store.Doc(path); doc != nil {
+	if doc = _cache.Doc(path); doc != nil {
 		return
 	}
 	var source *Source
@@ -69,7 +69,7 @@ func BuildFileTemplate(path string) (doc *Document, err error) {
 	if err != nil {
 		return
 	}
-	_store.AddDoc(path, doc)
+	_cache.AddDoc(path, doc)
 
 	return
 }

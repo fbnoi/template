@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	_store = &Documents{
-		store:  make(map[string]*Document),
+	_cache = &Documents{
+		cache:  make(map[string]*Document),
 		locker: &sync.RWMutex{},
 	}
 )
@@ -19,18 +19,18 @@ func NewDocument() *Document {
 }
 
 type Documents struct {
-	store  map[string]*Document
+	cache  map[string]*Document
 	locker *sync.RWMutex
 }
 
 func (docs *Documents) AddDoc(name string, doc *Document) error {
 	docs.locker.Lock()
 	defer docs.locker.Unlock()
-	if _, ok := docs.store[name]; ok {
+	if _, ok := docs.cache[name]; ok {
 		return errors.Errorf("document with name [%s] has already exists.", name)
 	}
 
-	docs.store[name] = doc
+	docs.cache[name] = doc
 
 	return nil
 }
@@ -39,7 +39,7 @@ func (docs *Documents) Doc(name string) *Document {
 	docs.locker.RLock()
 	defer docs.locker.RUnlock()
 
-	if doc, ok := docs.store[name]; ok {
+	if doc, ok := docs.cache[name]; ok {
 		return doc
 	}
 
