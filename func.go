@@ -18,27 +18,131 @@ func Get(p any, keys ...any) (value reflect.Value, err error) {
 	value = reflect.ValueOf(p)
 	for _, key := range keys {
 		kv := reflect.ValueOf(key)
-		if value, err = index(value, kv); err == nil {
-			continue
-		}
-
-		if name, ok := key.(string); ok {
-			if value, err = property(value, name); err == nil {
-				continue
+		switch value.Kind() {
+		case reflect.Map, reflect.Array, reflect.Slice, reflect.String:
+			if value, err = index(value, kv); err != nil {
+				return
 			}
 
-			fnNames := possibleFnNames(name)
-			for _, fnName := range fnNames {
-				if fn, err := method(value, fnName); err == nil {
-					if value, err = call(fn); err == nil {
-						continue
+		case reflect.Pointer, reflect.Struct:
+			if name, ok := key.(string); ok {
+				var (
+					tmpValue reflect.Value
+					tmpErr   error
+				)
+				tmpValue, err = property(value, name)
+				if err != nil {
+					fnNames := possibleFnNames(name)
+					var fn reflect.Value
+					for _, fnName := range fnNames {
+						if fn, tmpErr = method(value, fnName); tmpErr == nil {
+							if tmpValue, tmpErr = call(fn); tmpErr == nil {
+								break
+							}
+						}
+					}
+					if zeroValue == tmpValue {
+						err = errors.Errorf("neither property %s, nor methods %v exist in type %s",
+							name,
+							strings.Join(fnNames, "/"),
+							value.Type(),
+						)
+						return
 					}
 				}
+				value, err = tmpValue, nil
 			}
+
+		default:
+			err = errors.Errorf("can't get %s from %v", key, value)
+
+			return
 		}
 	}
 
 	return
+}
+
+func index(value reflect.Value, index reflect.Value) (reflect.Value, error) {
+	value, isNil := uncoverReference(value)
+	if !value.IsValid() || isNil {
+		return zeroValue, errors.New("index of nil value")
+	}
+
+	index = uncoverInterface(index)
+	if !index.IsValid() {
+		return zeroValue, errors.New("nil index")
+	}
+
+	switch value.Kind() {
+	case reflect.Array, reflect.Slice, reflect.String:
+		cap := value.Len()
+		x, err := prepareValueType(index, reflect.TypeOf(int(0)))
+		if err != nil {
+			return zeroValue, errors.Errorf("con't use type %s as array or slice index", index.Type())
+		}
+		if x.Int() < 0 || int(x.Int()+1) > cap {
+			return zeroValue, errors.Errorf("out of boundary, got %d", x.Int())
+		}
+
+		return value.Index(int(x.Int())), nil
+
+	case reflect.Map:
+		kType := value.Type().Key()
+		x, err := prepareValueType(index, kType)
+		if err != nil {
+			return zeroValue, errors.Errorf("con't use type %s as map[%s] key", index.Type(), kType.Name())
+		}
+		keyExist := false
+		keys := value.MapKeys()
+		for _, v := range keys {
+			if v.Interface() == x.Interface() {
+				keyExist = true
+			}
+		}
+		if !keyExist {
+			return zeroValue, errors.Errorf("index %s don't exist in map keys %s", x, keys)
+		}
+
+		return value.MapIndex(x), nil
+
+	default:
+		return zeroValue, errors.Errorf("can't index item of type %s", value.Type())
+
+	}
+}
+
+func property(value reflect.Value, name string) (reflect.Value, error) {
+	if !goodName(name) {
+		return zeroValue, errors.Errorf("%s is not a property's name", name)
+	}
+
+	value = uncoverInterface(value)
+
+	switch value.Kind() {
+	case reflect.Struct:
+		field, exist := value.Type().FieldByName(name)
+		if !exist {
+			return zeroValue, errors.Errorf("property named %s don't exist in type %s", name, value.Type())
+		}
+
+		if !field.IsExported() {
+			return zeroValue, errors.Errorf("property named %s isn't exported in type %s", name, value.Type())
+		}
+
+		return value.FieldByName(name), nil
+
+	case reflect.Pointer:
+		value, isNil := uncoverReference(value)
+		if isNil {
+			return zeroValue, errors.Errorf("can't get property from nil value")
+		}
+
+		return property(value, name)
+
+	default:
+		return zeroValue, errors.Errorf("can't get property from non-struct type %s", value.Type())
+	}
 }
 
 func add(x, y reflect.Value) (reflect.Value, error) {
@@ -70,9 +174,9 @@ func eq(x, y reflect.Value) (reflect.Value, error) {
 				switch {
 				case isFloat(z.Kind()):
 					r = z.Float() == 0
-				case isInt(z.Kind()):
+				case isIntLike(z.Kind()):
 					r = z.Int() == 0
-				case isUint(z.Kind()):
+				case isUintLike(z.Kind()):
 					r = z.Uint() == 0
 				}
 
@@ -81,10 +185,10 @@ func eq(x, y reflect.Value) (reflect.Value, error) {
 		}
 	} else {
 		var r bool
-		if isInt(x.Kind()) {
+		if isIntLike(x.Kind()) {
 			r = x.Int() == y.Int()
 		}
-		if isUint(x.Kind()) {
+		if isUintLike(x.Kind()) {
 			r = x.Uint() == y.Uint()
 		}
 		if isFloat(x.Kind()) {
@@ -119,6 +223,9 @@ func calc(x, y reflect.Value, op string) (reflect.Value, error) {
 	y = uncoverInterface(y)
 
 	if isNumber(x.Kind()) && isNumber(y.Kind()) {
+		if y.IsZero() {
+			return zeroValue, errors.New("can't use 0 as denominator")
+		}
 		var z, a, b any
 		if isFloat(x.Kind()) && y.CanConvert(x.Type()) {
 			y = y.Convert(x.Type())
@@ -126,55 +233,58 @@ func calc(x, y reflect.Value, op string) (reflect.Value, error) {
 		} else if isFloat(y.Kind()) && x.CanConvert(y.Type()) {
 			x = x.Convert(y.Type())
 			a, b = x.Float(), y.Float()
-		} else if isInt(x.Kind()) && y.CanConvert(x.Type()) {
+		} else if isIntLike(x.Kind()) && y.CanConvert(x.Type()) {
 			y = y.Convert(x.Type())
 			a, b = x.Int(), y.Int()
-		} else if isInt(y.Kind()) && x.CanConvert(y.Type()) {
+		} else if isIntLike(y.Kind()) && x.CanConvert(y.Type()) {
 			x = x.Convert(y.Type())
 			a, b = x.Int(), y.Int()
-		} else if isUint(x.Kind()) && isUint(y.Kind()) {
+		} else if isUintLike(x.Kind()) && isUintLike(y.Kind()) {
 			a, b = x.Uint(), y.Uint()
 		}
 
 		if a != nil && b != nil {
 			switch ai := a.(type) {
 			case int64:
+				bi := b.(int64)
 				switch op {
 				case "+":
-					z = ai + b.(int64)
+					z = ai + bi
 				case "-":
-					z = ai - b.(int64)
+					z = ai - bi
 				case "*":
-					z = ai * b.(int64)
+					z = ai * bi
 				case "/":
-					z = ai / b.(int64)
+					z = float64(ai) / float64(bi)
 				default:
 					return zeroValue, errors.Errorf("unsupported calculation %s", op)
 				}
 
 			case uint64:
+				bi := b.(uint64)
 				switch op {
 				case "+":
-					z = ai + b.(uint64)
+					z = ai + bi
 				case "-":
-					z = ai - b.(uint64)
+					z = ai - bi
 				case "*":
-					z = ai * b.(uint64)
+					z = ai * bi
 				case "/":
-					z = ai / b.(uint64)
+					z = float64(ai) / float64(bi)
 				default:
 					return zeroValue, errors.Errorf("unsupported calculation %s", op)
 				}
 			case float64:
+				bi := b.(float64)
 				switch op {
 				case "+":
-					z = ai + b.(float64)
+					z = ai + bi
 				case "-":
-					z = ai - b.(float64)
+					z = ai - bi
 				case "*":
-					z = ai * b.(float64)
+					z = ai * bi
 				case "/":
-					z = ai / b.(float64)
+					z = float64(ai) / float64(bi)
 				default:
 					return zeroValue, errors.Errorf("unsupported calculation %s", op)
 				}
@@ -202,9 +312,9 @@ func greater(x, y reflect.Value) (reflect.Value, error) {
 				switch {
 				case isFloat(z.Kind()):
 					r = z.Float() > 0
-				case isInt(z.Kind()):
+				case isIntLike(z.Kind()):
 					r = z.Int() > 0
-				case isUint(z.Kind()):
+				case isUintLike(z.Kind()):
 					r = z.Uint() > 0
 				}
 
@@ -215,9 +325,9 @@ func greater(x, y reflect.Value) (reflect.Value, error) {
 		return reflect.ValueOf(false), errors.Errorf("con't compare type %s and %s", x.Type(), y.Type())
 	} else {
 		var r bool
-		if isInt(x.Kind()) {
+		if isIntLike(x.Kind()) {
 			r = x.Int() > y.Int()
-		} else if isUint(x.Kind()) {
+		} else if isUintLike(x.Kind()) {
 			r = x.Uint() > y.Uint()
 		} else if isFloat(x.Kind()) {
 			r = x.Float() > y.Float()
@@ -240,86 +350,6 @@ func greaterOrEqual(x, y reflect.Value) (reflect.Value, error) {
 	return greater(x, y)
 }
 
-func index(value reflect.Value, index reflect.Value) (reflect.Value, error) {
-	value, isNil := uncoverReference(value)
-	if !value.IsValid() || isNil {
-		return zeroValue, errors.New("index of nil value")
-	}
-
-	index = uncoverInterface(index)
-	if !index.IsValid() {
-		return zeroValue, errors.New("nil index")
-	}
-
-	switch value.Kind() {
-	case reflect.Array, reflect.Slice, reflect.String:
-		cap := value.Len()
-		x, err := prepareValueType(index, reflect.TypeOf(int(0)))
-		if err != nil {
-			return zeroValue, errors.Errorf("con't use type %s as index", index.Type())
-		}
-		if x.Int() < 0 || int(x.Int()) > cap {
-			return zeroValue, errors.Errorf("out of boundary, got %d", x)
-		}
-
-		return value.Index(int(x.Int())), nil
-
-	case reflect.Map:
-		kType := value.Type().Key()
-		x, err := prepareValueType(index, kType)
-		if err != nil {
-			return zeroValue, err
-		}
-		var item reflect.Value
-		if item = value.MapIndex(x); !value.IsValid() {
-			return zeroValue, errors.Errorf("index %s don't exist in map %s", x, value)
-		}
-
-		return item, nil
-
-	default:
-		return zeroValue, errors.Errorf("can't index item of type %s", value.Type())
-
-	}
-}
-
-func property(value reflect.Value, name string) (reflect.Value, error) {
-	if !goodName(name) {
-		return zeroValue, errors.Errorf("%s is not a property's name", name)
-	}
-
-	value = uncoverInterface(value)
-
-	if value.IsNil() {
-		return zeroValue, errors.Errorf("can't get property from nil value")
-	}
-
-	switch value.Kind() {
-	case reflect.Struct:
-		field, exist := value.Type().FieldByName(name)
-		if !exist {
-			return zeroValue, errors.Errorf("property named %s don't exist in type %s", name, value.Type())
-		}
-
-		if !field.IsExported() {
-			return zeroValue, errors.Errorf("property named %s isn't exported in type %s", name, value.Type())
-		}
-
-		return value.FieldByName(name), nil
-	case reflect.Pointer:
-		value, isNil := uncoverReference(value)
-		if isNil {
-			return zeroValue, errors.Errorf("can't get property from nil value")
-		}
-
-		return property(value, name)
-
-	default:
-		return zeroValue, errors.Errorf("can't get property from non-struct type %s", value.Type())
-
-	}
-}
-
 func method(value reflect.Value, name string) (reflect.Value, error) {
 	if !goodName(name) {
 		return zeroValue, errors.Errorf("%s is not a property's name", name)
@@ -333,11 +363,11 @@ func method(value reflect.Value, name string) (reflect.Value, error) {
 
 	method, exist := value.Type().MethodByName(name)
 	if !exist {
-		return zeroValue, errors.Errorf("method named %s isn't exist in type %s", name, value.Type())
+		return zeroValue, errors.Errorf("method named %s doesn't exist in type %s", name, value.Type())
 	}
 
 	if !method.IsExported() {
-		return zeroValue, errors.Errorf("method named %s isn't exported in type %s", name, value.Type())
+		return zeroValue, errors.Errorf("method named %s doesn't exported in type %s", name, value.Type())
 	}
 
 	return value.MethodByName(name), nil
@@ -345,7 +375,7 @@ func method(value reflect.Value, name string) (reflect.Value, error) {
 
 func call(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 	fn = uncoverInterface(fn)
-	if fn.IsValid() {
+	if !fn.IsValid() {
 		return zeroValue, errors.New("call on nil")
 	}
 	typ := fn.Type()
@@ -375,7 +405,7 @@ func call(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 	argv := make([]reflect.Value, len(args))
 	for i, arg := range args {
 		arg = uncoverInterface(arg)
-		// Compute the expected type. Clumsy because of variadics.
+		// Compute the expected type. Clumsy because of variadic.
 		argType := vType
 		if !typ.IsVariadic() || i < numIn-1 {
 			argType = typ.In(i)
@@ -383,7 +413,7 @@ func call(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 
 		var err error
 		if argv[i], err = prepareValueType(arg, argType); err != nil {
-			return zeroValue, errors.Errorf("call func err, arg %d: %w", i, err)
+			return zeroValue, errors.Errorf("call func err, arg %d: %s", i, err)
 		}
 	}
 
@@ -422,10 +452,10 @@ func isNumber(kind reflect.Kind) bool {
 }
 
 func isInteger(kind reflect.Kind) bool {
-	return isInt(kind) || isUint(kind)
+	return isIntLike(kind) || isUintLike(kind)
 }
 
-func isInt(kind reflect.Kind) bool {
+func isIntLike(kind reflect.Kind) bool {
 	switch kind {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return true
@@ -433,7 +463,7 @@ func isInt(kind reflect.Kind) bool {
 	return false
 }
 
-func isUint(kind reflect.Kind) bool {
+func isUintLike(kind reflect.Kind) bool {
 	switch kind {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return true
@@ -489,6 +519,12 @@ func goodName(name string) bool {
 }
 
 func goodFunc(typ reflect.Type) bool {
+	if typ == nil {
+		return false
+	}
+	if typ.Kind() != reflect.Func {
+		return false
+	}
 	switch {
 	case typ.NumOut() == 1:
 		return true

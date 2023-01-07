@@ -296,10 +296,10 @@ func (d *SetDirect) Execute(p Params) (string, error) {
 func strValue(v reflect.Value) (string, error) {
 	v = uncoverInterface(v)
 	kind := v.Kind()
-	if isInt(kind) {
+	if isIntLike(kind) {
 		return strconv.Itoa(int(v.Int())), nil
 	}
-	if isUint(kind) {
+	if isUintLike(kind) {
 		return strconv.Itoa(int(v.Uint())), nil
 	}
 	if isFloat(kind) {
