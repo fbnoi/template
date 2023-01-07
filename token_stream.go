@@ -29,7 +29,7 @@ var (
 	// whitespace
 	reg_whitespace = regexp.MustCompile(`^\s+`)
 	// . + - * / > < = ! and or not in
-	reg_operator = regexp.MustCompile(`^[\!\.\+\-*\/><=]{1,3}|^(and)|^(or)|^(not)|^(in)`)
+	reg_operator = regexp.MustCompile(`^[\!\.\+\-*\/><=]{1,3}|^(and|or|in)\s`)
 	// name
 	reg_name = regexp.MustCompile(`^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*`)
 	// number
@@ -131,7 +131,8 @@ func Tokenize(source *Source) (*TokenStream, error) {
 				continue
 			}
 			if sPos := reg_operator.FindStringIndex(code[cursor:end]); sPos != nil {
-				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, code[cursor:cursor+sPos[1]], line))
+				op := strings.TrimSpace(code[cursor : cursor+sPos[1]])
+				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, op, line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos := reg_name.FindStringIndex(code[cursor:end]); sPos != nil {
 				stream.tokens = append(stream.tokens, newToken(TYPE_NAME, code[cursor:cursor+sPos[1]], line))
@@ -140,7 +141,8 @@ func Tokenize(source *Source) (*TokenStream, error) {
 				stream.tokens = append(stream.tokens, newToken(TYPE_NUMBER, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos := reg_string.FindStringIndex(code[cursor:end]); sPos != nil {
-				stream.tokens = append(stream.tokens, newToken(TYPE_STRING, code[cursor:cursor+sPos[1]], line))
+				str := strings.Trim(code[cursor:cursor+sPos[1]], "\"'")
+				stream.tokens = append(stream.tokens, newToken(TYPE_STRING, str, line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos := reg_punctuation.FindStringIndex(code[cursor:end]); sPos != nil {
 				bracket := code[cursor+sPos[0] : cursor+sPos[1]]

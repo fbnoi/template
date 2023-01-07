@@ -23,13 +23,15 @@ type Expr interface {
 	Node
 	exprNode()
 	Literal() string
-	Execute(p *Params) (reflect.Value, error)
+	Execute(p Params) (reflect.Value, error)
 }
 
 // All statement nodes implement the Direct interface.
 type Direct interface {
 	Node
 	directNode()
+	Execute(p Params) (string, error)
+	Type() string
 }
 
 type AppendAble interface {
@@ -131,7 +133,7 @@ type (
 
 	// A ForDirect represents a for statement.
 	ForDirect struct {
-		Key, Value *Ident // Key, Value may be nil, Ident expr
+		Key, Value *Ident // Key may be nil, Value, Ident expr
 		X          Expr   // value to range over
 		Body       *SectionDirect
 	}
@@ -140,11 +142,12 @@ type (
 	BlockDirect struct {
 		Name *BasicLit      // name of block; not nil
 		Body *SectionDirect // body of block; not nil
+		Doc  *Document
 	}
 
 	IncludeDirect struct {
 		Path   *BasicLit // string of template path
-		Params Params    // parameters injected into block
+		Params Expr      // parameters injected into block
 		Doc    *Document // not nil
 	}
 
@@ -168,6 +171,41 @@ func (*BlockDirect) directNode()   {}
 func (*IncludeDirect) directNode() {}
 func (*ExtendDirect) directNode()  {}
 func (*SetDirect) directNode()     {}
+func (*Document) directNode()      {}
+
+func (*TextDirect) Type() string {
+	return "TextDirect"
+}
+func (*ValueDirect) Type() string {
+	return "ValueDirect"
+}
+func (*AssignDirect) Type() string {
+	return "AssignDirect"
+}
+func (*SectionDirect) Type() string {
+	return "SectionDirect"
+}
+func (*IfDirect) Type() string {
+	return "IfDirect"
+}
+func (*ForDirect) Type() string {
+	return "ForDirect"
+}
+func (*BlockDirect) Type() string {
+	return "BlockDirect"
+}
+func (*IncludeDirect) Type() string {
+	return "IncludeDirect"
+}
+func (*ExtendDirect) Type() string {
+	return "ExtendDirect"
+}
+func (*SetDirect) Type() string {
+	return "SetDirect"
+}
+func (*Document) Type() string {
+	return "Document"
+}
 
 // Append() ensures that only statement nodes can be
 // assigned to a Direct.
@@ -228,7 +266,7 @@ func (e *CallExpr) Literal() string {
 	return fmt.Sprintf("%s(%s)", e.Func.Literal(), e.Args.Literal())
 }
 func (e *BinaryExpr) Literal() string {
-	return fmt.Sprintf("%s%s%s", e.X.Literal(), e.Op.value, e.Y.Literal())
+	return fmt.Sprintf("%s %s %s", e.X.Literal(), e.Op.value, e.Y.Literal())
 }
 func (e *SingleExpr) Literal() string {
 	return fmt.Sprintf("%s %s", e.Op.value, e.X.Literal())

@@ -1,24 +1,25 @@
 package template
 
 var (
-	block_store_name = "__blocks__"
+	block_store_name   = "_blocks_"
+	block_remains_name = "__parent__"
 )
 
 type Params map[string]any
 
-func copyParams(ps Params) Params {
-	nps := make(map[string]any)
-	for n, v := range ps {
-		nps[n] = v
+func (p Params) copy() Params {
+	np := make(Params)
+	for k, v := range p {
+		np[k] = v
 	}
 
-	return nps
+	return np
 }
 
 func (p Params) getBlock(name string) *BlockDirect {
-	if blockIfs, ok := p[block_store_name]; ok {
-		blocks := blockIfs.(map[string]*BlockDirect)
-		if block, ok := blocks[name]; ok {
+	if _blocks, ok := p[block_store_name]; ok {
+		_blocksMap := _blocks.(map[string]*BlockDirect)
+		if block, ok := _blocksMap[name]; ok {
 			return block
 		}
 	}
@@ -30,16 +31,17 @@ func (p Params) setBlock(name string, block *BlockDirect) {
 	if block == nil {
 		return
 	}
-
-	if blockIfs, ok := p[block_store_name]; ok {
-		blocks := blockIfs.(map[string]*BlockDirect)
-		blocks[name] = block
-		p[block_store_name] = blocks
-
-		return
+	var blocks map[string]*BlockDirect
+	if _, ok := p[block_store_name]; ok {
+		blocks = p[block_store_name].(map[string]*BlockDirect)
+	} else {
+		blocks = make(map[string]*BlockDirect)
 	}
-
-	blocks := make(map[string]*BlockDirect)
 	blocks[name] = block
+
 	p[block_store_name] = blocks
+}
+
+func (p Params) setBlockRemains(remains string) {
+	p[block_remains_name] = remains
 }

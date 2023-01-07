@@ -1,7 +1,6 @@
 package template
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -56,17 +55,23 @@ func BuildTemplate(content string) (*Document, error) {
 	return buildSource(source)
 }
 
-func BuildFileTemplate(path string) (*Document, error) {
-	var (
-		source *Source
-		err    error
-	)
+func BuildFileTemplate(path string) (doc *Document, err error) {
+	if doc = _cache.Doc(path); doc != nil {
+		return
+	}
+	var source *Source
 	source, err = NewSourceFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return buildSource(source)
+	doc, err = buildSource(source)
+	if err != nil {
+		return
+	}
+	_cache.AddDoc(path, doc)
+
+	return
 }
 
 func buildSource(source *Source) (*Document, error) {
@@ -100,7 +105,7 @@ func compare(op1, op2 string) bool {
 }
 
 func allowOp(op *Token) bool {
-	_, ok := rank[op.Value()]
+	_, ok := rank[op.value]
 
 	return ok
 }
@@ -159,7 +164,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 
 		case TYPE_COMMAND_START:
 			token, _ := stream.Next()
-			switch token.Value() {
+			switch token.value {
 			case "endblock":
 				if _, ok := sb.cursor.(*BlockDirect); !ok {
 					return newUnexpectedToken(token)
@@ -185,9 +190,10 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					return newUnexpectedToken(token)
 				}
 				node.Path = &BasicLit{Kind: token.Type(), Value: token}
-				if baseDoc, err := BuildFileTemplate(token.Value()); err != nil {
+				if baseDoc, err := BuildFileTemplate(token.value); err != nil {
 					return err
 				} else {
+					baseDoc.extended = true
 					node.Doc = baseDoc
 				}
 				doc.Extend = node
@@ -197,19 +203,20 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 
 			case "include":
-				node := &IncludeDirect{Params: make(Params)}
+				node := &IncludeDirect{}
 				token, _ := stream.Next()
 				if token.Type() != TYPE_STRING {
 					return newUnexpectedToken(token)
 				}
 				node.Path = &BasicLit{Kind: token.Type(), Value: token}
-				if baseDoc, err := BuildFileTemplate(token.Value()); err != nil {
+				if baseDoc, err := BuildFileTemplate(node.Path.Value.value); err != nil {
 					return err
 				} else {
 					node.Doc = baseDoc
 				}
 				token, _ = stream.Next()
-				if token.Value() == "with" {
+				if token.value == "with" {
+					token, _ = stream.Next()
 					i := stream.CurrentIndex()
 					for token.Type() != TYPE_COMMAND_END {
 						token, _ = stream.Next()
@@ -218,12 +225,16 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 						return newUnexpectedToken(token)
 					}
 					subStream := stream.SubStream(i, stream.CurrentIndex())
-					if err := json.Unmarshal([]byte(subStream.String()), &node.Params); err != nil {
+					box := GetExprSandbox()
+					defer PutExprSandbox(box)
+					if err := box.build(subStream); err != nil {
 						return err
 					}
+					node.Params = box.expr
 				} else if token.Type() != TYPE_COMMAND_END {
 					return newUnexpectedToken(token)
 				}
+				sb.cursor.Append(node)
 
 			case "block":
 				token, _ := stream.Next()
@@ -232,6 +243,10 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 				node := &BlockDirect{Name: &BasicLit{Kind: TYPE_STRING, Value: token}}
 				sb.pushStack(node)
+				if _, ok := doc.blocks[token.value]; ok {
+					return errors.Errorf("block %s has already exist", token.value)
+				}
+				doc.blocks[token.value] = node
 
 			case "set":
 				node := &AssignDirect{}
@@ -242,7 +257,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				node.Lh = &Ident{Name: token}
 
 				token, _ = stream.Next()
-				if token.Value() != "=" {
+				if token.value != "=" {
 					return newUnexpectedToken(token)
 				}
 
@@ -321,7 +336,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					return newUnexpectedToken(token)
 				}
 				pTok, _ := stream.Peek(1)
-				if pTok.Value() != "," {
+				if pTok.value != "," {
 					node.Value = &Ident{Name: token}
 				} else {
 					node.Key = &Ident{Name: token}
@@ -329,7 +344,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					node.Value = &Ident{Name: token}
 				}
 				token, _ = stream.Next()
-				if token.Value() != "in" {
+				if token.value != "in" {
 					return newUnexpectedToken(token)
 				}
 				token, _ = stream.Next()
@@ -398,12 +413,12 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 			esb.exprStack = append(esb.exprStack, b)
 
 		case TYPE_NAME:
-			if strings.Contains(internalKeyWords, fmt.Sprintf("_%s_", token.Value())) {
+			if strings.Contains(internalKeyWords, fmt.Sprintf("_%s_", token.value)) {
 				return newUnexpectedToken(token)
 			}
 			i := &Ident{Name: token}
 			if !stream.IsEOF() {
-				if nextToken, err := stream.Peek(1); err == nil && nextToken.Value() == "(" {
+				if nextToken, err := stream.Peek(1); err == nil && nextToken.value == "(" {
 					c := &CallExpr{Func: i}
 					esb.exprStack = append(esb.exprStack, c)
 					continue
@@ -419,7 +434,7 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 				esb.opStack = append(esb.opStack, token)
 			} else {
 				topOp := esb.opStack[len(esb.opStack)-1]
-				for compare(topOp.Value(), token.Value()) {
+				for compare(topOp.value, token.value) {
 					esb.mergeExprStack(topOp)
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
 					if len(esb.opStack) == 0 {
@@ -431,13 +446,13 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 			}
 
 		case TYPE_PUNCTUATION:
-			switch token.Value() {
+			switch token.value {
 			case "(", "[":
 				esb.opStack = append(esb.opStack, token)
 
 			case ")":
 				topOp := esb.opStack[len(esb.opStack)-1]
-				for topOp.Value() != "(" {
+				for topOp.value != "(" {
 					esb.mergeExprStack(topOp)
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
 					if len(esb.opStack) == 0 {
@@ -450,7 +465,7 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 
 			case "]":
 				topOp := esb.opStack[len(esb.opStack)-1]
-				for topOp.Value() != "[" {
+				for topOp.value != "[" {
 					esb.mergeExprStack(topOp)
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
 					if len(esb.opStack) == 0 {
@@ -463,7 +478,7 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 
 			case ",":
 				topOp := esb.opStack[len(esb.opStack)-1]
-				for topOp.Value() != "(" {
+				for topOp.value != "(" {
 					esb.mergeExprStack(topOp)
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
 					if len(esb.opStack) == 0 {
@@ -510,7 +525,7 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 	if len(esb.exprStack) < 2 {
 		return newUnexpectedToken(token)
 	}
-	switch token.Value() {
+	switch token.value {
 	case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or":
 		expr1 := esb.exprStack[len(esb.exprStack)-2]
 		expr2 := esb.exprStack[len(esb.exprStack)-1]

@@ -1,31 +1,36 @@
 package template
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 )
 
 var (
-	_store = &Documents{
-		store:  make(map[string]*Document),
+	_cache = &Documents{
+		cache:  make(map[string]*Document),
 		locker: &sync.RWMutex{},
 	}
 )
 
+func NewDocument() *Document {
+	return &Document{blocks: make(map[string]*BlockDirect)}
+}
+
 type Documents struct {
-	store  map[string]*Document
+	cache  map[string]*Document
 	locker *sync.RWMutex
 }
 
 func (docs *Documents) AddDoc(name string, doc *Document) error {
 	docs.locker.Lock()
 	defer docs.locker.Unlock()
-	if _, ok := docs.store[name]; ok {
+	if _, ok := docs.cache[name]; ok {
 		return errors.Errorf("document with name [%s] has already exists.", name)
 	}
 
-	docs.store[name] = doc
+	docs.cache[name] = doc
 
 	return nil
 }
@@ -34,7 +39,7 @@ func (docs *Documents) Doc(name string) *Document {
 	docs.locker.RLock()
 	defer docs.locker.RUnlock()
 
-	if doc, ok := docs.store[name]; ok {
+	if doc, ok := docs.cache[name]; ok {
 		return doc
 	}
 
@@ -44,34 +49,37 @@ func (docs *Documents) Doc(name string) *Document {
 type Document struct {
 	Extend *ExtendDirect
 	Body   *SectionDirect
+	blocks map[string]*BlockDirect
+
+	extended bool
 }
 
 func (doc *Document) Block(name string) *BlockDirect {
-	for _, br := range doc.Body.List {
-		if b, ok := br.(*BlockDirect); ok && b.Name.Value.Value() == name {
-			return b
-		}
+	if block, ok := doc.blocks[name]; ok {
+		return block
 	}
 
 	return nil
 }
 
-func (doc *Document) Execute(data any) (string, error) {
+func (doc *Document) Execute(p Params) (string, error) {
+	sb := &strings.Builder{}
+	nd := doc
 	if doc.Extend != nil {
-		if pDoc := _store.Doc(doc.Extend.Path.Value.Value()); pDoc != nil {
-			return pDoc.executeWithTpl(data, doc)
+		nd = doc.Extend.Doc
+		for n, b := range doc.blocks {
+			p.setBlock(n, b)
+		}
+	}
+	for _, v := range nd.Body.List {
+		if str, err := v.Execute(p); err != nil {
+			return "", err
+		} else {
+			sb.WriteString(str)
 		}
 	}
 
-	return doc.execute(data)
-}
-
-func (doc *Document) execute(data any) (string, error) {
-	return "", nil
-}
-
-func (doc *Document) executeWithTpl(data any, xDoc *Document) (string, error) {
-	return "", nil
+	return sb.String(), nil
 }
 
 func (doc *Document) Append(x Direct) {
@@ -80,8 +88,6 @@ func (doc *Document) Append(x Direct) {
 	}
 	doc.Body.List = append(doc.Body.List, x)
 }
-
-func (*Document) directNode() {}
 
 func (d *Document) Validate() error {
 	if d.Extend != nil {
