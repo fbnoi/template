@@ -72,27 +72,39 @@ func TypeToEnglish(typ int) string {
 	switch typ {
 	case TYPE_EOF:
 		return "end of template"
+
 	case TYPE_TEXT:
 		return "text"
+
 	case TYPE_COMMAND_START:
 		return "begin of statement command"
+
 	case TYPE_VAR_START:
 		return "begin of print statement"
+
 	case TYPE_COMMAND_END:
 		return "end of statement command"
+
 	case TYPE_VAR_END:
 		return "end of print statement"
+
 	case TYPE_NAME:
 		return "name"
+
 	case TYPE_NUMBER:
 		return "number"
+
 	case TYPE_STRING:
 		return "string"
+
 	case TYPE_OPERATOR:
 		return "operator"
+
 	case TYPE_PUNCTUATION:
 		return "punctuation"
+
 	default:
 		panic(fmt.Sprintf("Token of type '%d' does not exist.", typ))
+
 	}
 }

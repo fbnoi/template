@@ -10,12 +10,15 @@ import (
 
 var (
 	rank = map[string]int{
-		".":   0,
-		"|":   0,
-		"*":   1,
-		"/":   1,
-		"+":   2,
-		"-":   2,
+		"(":   0,
+		")":   0,
+		".":   1,
+		"[":   2,
+		"]":   2,
+		"*":   3,
+		"/":   3,
+		"+":   4,
+		"-":   4,
 		">":   10,
 		"<":   10,
 		">=":  10,
@@ -101,7 +104,7 @@ func build(doc *Document, stream *TokenStream) error {
 }
 
 func compare(op1, op2 string) bool {
-	return rank[op1] < rank[op2]
+	return rank[op1] <= rank[op2]
 }
 
 func allowOp(op *Token) bool {
@@ -427,14 +430,13 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 			esb.exprStack = append(esb.exprStack, i)
 
 		case TYPE_OPERATOR:
-			if !allowOp(token) {
-				return newUnexpectedToken(token)
-			}
-			if len(esb.opStack) == 0 {
-				esb.opStack = append(esb.opStack, token)
-			} else {
+			if token.value == ")" || token.value == "]" {
+				openBracket := "("
+				if token.value == "]" {
+					openBracket = "["
+				}
 				topOp := esb.opStack[len(esb.opStack)-1]
-				for compare(topOp.value, token.value) {
+				for topOp.value != openBracket {
 					esb.mergeExprStack(topOp)
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
 					if len(esb.opStack) == 0 {
@@ -442,40 +444,32 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 					}
 					topOp = esb.opStack[len(esb.opStack)-1]
 				}
-				esb.opStack = append(esb.opStack, token)
+				if openBracket == "(" {
+					esb.opStack = esb.opStack[:len(esb.opStack)-1]
+				}
+				esb.mergeExprStack(token)
+			} else {
+				if !allowOp(token) {
+					return newUnexpectedToken(token)
+				}
+				if len(esb.opStack) == 0 {
+					esb.opStack = append(esb.opStack, token)
+				} else {
+					topOp := esb.opStack[len(esb.opStack)-1]
+					for compare(topOp.value, token.value) {
+						esb.mergeExprStack(topOp)
+						esb.opStack = esb.opStack[:len(esb.opStack)-1]
+						if len(esb.opStack) == 0 {
+							break
+						}
+						topOp = esb.opStack[len(esb.opStack)-1]
+					}
+					esb.opStack = append(esb.opStack, token)
+				}
 			}
 
 		case TYPE_PUNCTUATION:
 			switch token.value {
-			case "(", "[":
-				esb.opStack = append(esb.opStack, token)
-
-			case ")":
-				topOp := esb.opStack[len(esb.opStack)-1]
-				for topOp.value != "(" {
-					esb.mergeExprStack(topOp)
-					esb.opStack = esb.opStack[:len(esb.opStack)-1]
-					if len(esb.opStack) == 0 {
-						break
-					}
-					topOp = esb.opStack[len(esb.opStack)-1]
-				}
-				esb.opStack = esb.opStack[:len(esb.opStack)-1]
-				esb.mergeExprStack(token)
-
-			case "]":
-				topOp := esb.opStack[len(esb.opStack)-1]
-				for topOp.value != "[" {
-					esb.mergeExprStack(topOp)
-					esb.opStack = esb.opStack[:len(esb.opStack)-1]
-					if len(esb.opStack) == 0 {
-						break
-					}
-					topOp = esb.opStack[len(esb.opStack)-1]
-				}
-				esb.opStack = esb.opStack[:len(esb.opStack)-1]
-				esb.mergeExprStack(token)
-
 			case ",":
 				topOp := esb.opStack[len(esb.opStack)-1]
 				for topOp.value != "(" {
@@ -541,9 +535,6 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 		expr1 := esb.exprStack[len(esb.exprStack)-2]
 		expr2 := esb.exprStack[len(esb.exprStack)-1]
 		esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
-		if _, ok := expr1.(*Ident); !ok {
-			return newUnexpectedToken(token)
-		}
 		i := &IndexExpr{X: expr1, Op: token, Index: expr2}
 		esb.exprStack = append(esb.exprStack, i)
 

@@ -19,7 +19,7 @@ type UnClosedToken struct {
 }
 
 func (e *UnClosedToken) Error() string {
-	return fmt.Sprintf("Un closed token \"%s\" in line %d", e.token, e.Line)
+	return fmt.Sprintf("Unclosed token \"%s\" in line %d", e.token, e.Line)
 }
 
 type UnexpectedToken struct {
@@ -28,5 +28,5 @@ type UnexpectedToken struct {
 }
 
 func (e *UnexpectedToken) Error() string {
-	return fmt.Sprintf("Un expected token \"%s\" in line %d", e.token, e.Line)
+	return fmt.Sprintf("Unexpected token \"%s\" in line %d", e.token, e.Line)
 }

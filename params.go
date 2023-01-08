@@ -38,7 +38,6 @@ func (p Params) setBlock(name string, block *BlockDirect) {
 		blocks = make(map[string]*BlockDirect)
 	}
 	blocks[name] = block
-
 	p[block_store_name] = blocks
 }
 

@@ -13,6 +13,8 @@ var (
 	TAG_ESCAPE_COMMENT  = [...]string{`@{#`, `#}`}
 	TAG_ESCAPE_BLOCK    = [...]string{`@{%`, `%}`}
 	TAG_ESCAPE_VARIABLE = [...]string{`@{{`, `}}`}
+
+	word_operators = [...]string{"and", "or", "in"}
 )
 
 var (
@@ -28,16 +30,18 @@ var (
 	reg_enter = regexp.MustCompile(`(\r\n|\n)`)
 	// whitespace
 	reg_whitespace = regexp.MustCompile(`^\s+`)
-	// . + - * / > < = ! and or not in
-	reg_operator = regexp.MustCompile(`^[\!\.\+\-*\/><=]{1,3}|^(and|or|in)\s`)
+	// . + - * / > < = !
+	reg_operator = regexp.MustCompile(`^[\!\.\+\-*\/><=]{1,3}`)
+	// bracket [ ] ( )
+	reg_bracket       = regexp.MustCompile(`^[\[\]\(\)]`)
+	reg_bracket_open  = regexp.MustCompile(`^[\[\(]$`)
+	reg_bracket_close = regexp.MustCompile(`^[\]\)]$`)
 	// name
-	reg_name = regexp.MustCompile(`^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*`)
+	reg_word = regexp.MustCompile(`^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*`)
 	// number
-	reg_number = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?([Ee][\+\-][0-9]+)?`)
-	// punctuation () [] {} , |
-	reg_punctuation   = regexp.MustCompile(`^[\(\)\[\]\{\}\?,\|]`)
-	reg_bracket_open  = regexp.MustCompile(`^[\{\[\(]$`)
-	reg_bracket_close = regexp.MustCompile(`^[\}\]\)]$`)
+	reg_number      = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?([Ee][\+\-][0-9]+)?`)
+	reg_punctuation = regexp.MustCompile(`^[\?,]`)
+
 	// string
 	reg_string = regexp.MustCompile(`^"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"|^'([^\'\\\\]*(?:\\\\.[^\'\\\\]*)*)'`)
 )
@@ -131,11 +135,15 @@ func Tokenize(source *Source) (*TokenStream, error) {
 				continue
 			}
 			if sPos := reg_operator.FindStringIndex(code[cursor:end]); sPos != nil {
-				op := strings.TrimSpace(code[cursor : cursor+sPos[1]])
-				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, op, line))
+				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
-			} else if sPos := reg_name.FindStringIndex(code[cursor:end]); sPos != nil {
-				stream.tokens = append(stream.tokens, newToken(TYPE_NAME, code[cursor:cursor+sPos[1]], line))
+			} else if sPos := reg_word.FindStringIndex(code[cursor:end]); sPos != nil {
+				word := code[cursor : cursor+sPos[1]]
+				if isWordOperator(word) {
+					stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, word, line))
+					continue
+				}
+				stream.tokens = append(stream.tokens, newToken(TYPE_NAME, word, line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos := reg_number.FindStringIndex(code[cursor:end]); sPos != nil {
 				stream.tokens = append(stream.tokens, newToken(TYPE_NUMBER, code[cursor:cursor+sPos[1]], line))
@@ -145,6 +153,9 @@ func Tokenize(source *Source) (*TokenStream, error) {
 				stream.tokens = append(stream.tokens, newToken(TYPE_STRING, str, line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos := reg_punctuation.FindStringIndex(code[cursor:end]); sPos != nil {
+				stream.tokens = append(stream.tokens, newToken(TYPE_PUNCTUATION, code[cursor:cursor+sPos[1]], line))
+				moveCursor(cursor + sPos[1])
+			} else if sPos := reg_bracket.FindStringIndex(code[cursor:end]); sPos != nil {
 				bracket := code[cursor+sPos[0] : cursor+sPos[1]]
 				if reg_bracket_open.MatchString(bracket) {
 					brackets = append(brackets, &Bracket{ch: bracket, Line: line})
@@ -154,8 +165,6 @@ func Tokenize(source *Source) (*TokenStream, error) {
 					}
 					opBracket := brackets[len(brackets)-1]
 					switch {
-					case opBracket.ch == "{" && bracket != "}":
-						return nil, &UnexpectedToken{Line: line, token: bracket}
 					case opBracket.ch == "(" && bracket != ")":
 						return nil, &UnexpectedToken{Line: line, token: bracket}
 					case opBracket.ch == "[" && bracket != "]":
@@ -163,7 +172,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 					}
 					brackets = brackets[:len(brackets)-1]
 				}
-				stream.tokens = append(stream.tokens, newToken(TYPE_PUNCTUATION, bracket, line))
+				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, bracket, line))
 				moveCursor(cursor + sPos[1])
 			} else {
 				return nil, &UnexpectedToken{Line: line, token: code[cursor:end]}
@@ -281,4 +290,14 @@ func (ts *TokenStream) SubStream(start, end int) *TokenStream {
 
 func (ts *TokenStream) CurrentIndex() int {
 	return ts.current
+}
+
+func isWordOperator(word string) bool {
+	for _, v := range word_operators {
+		if v == word {
+			return true
+		}
+	}
+
+	return false
 }
