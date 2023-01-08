@@ -430,24 +430,27 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 			esb.exprStack = append(esb.exprStack, i)
 
 		case TYPE_OPERATOR:
-			if token.value == ")" || token.value == "]" {
-				openBracket := "("
-				if token.value == "]" {
-					openBracket = "["
-				}
-				topOp := esb.opStack[len(esb.opStack)-1]
-				for topOp.value != openBracket {
-					esb.mergeExprStack(topOp)
+			if token.value == ")" {
+				for {
+					topOp := esb.opStack[len(esb.opStack)-1]
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
-					if len(esb.opStack) == 0 {
+					if topOp.value != "(" {
+						esb.mergeExprStack(topOp)
+						continue
+					}
+					if topOp.value == "(" || len(esb.opStack) == 0 {
 						break
 					}
-					topOp = esb.opStack[len(esb.opStack)-1]
 				}
-				if openBracket == "(" {
+			} else if token.value == "]" {
+				for {
+					topOp := esb.opStack[len(esb.opStack)-1]
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
+					esb.mergeExprStack(topOp)
+					if topOp.value == "[" || len(esb.opStack) == 0 {
+						break
+					}
 				}
-				esb.mergeExprStack(token)
 			} else {
 				if !allowOp(token) {
 					return newUnexpectedToken(token)
@@ -501,7 +504,7 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 	}
 
 	if len(esb.exprStack) != 1 {
-		return errors.Errorf("parse expr failed: %s", stream.String())
+		return errors.Errorf("parse expr failed1: %s", stream.String())
 	}
 
 	esb.expr = esb.exprStack[0]

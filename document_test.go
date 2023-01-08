@@ -28,7 +28,7 @@ func (r *Role) GetName() string {
 	return r.name
 }
 
-func TestBuildTemplate(t *testing.T) {
+func TestTemplate(t *testing.T) {
 	doc, err := BuildTemplate("Hello world")
 	assert.Nil(t, err)
 	content, err := doc.Execute(nil)
@@ -47,10 +47,20 @@ func TestBuildTemplate(t *testing.T) {
 	content, err = doc.Execute(Params{"person": person})
 	assert.Nil(t, err)
 	assert.Equal(t, "Hello Admin Jack", content)
+
+	doc, err = BuildTemplate("Hello {{ person['role']['name'] }} {{ person['name'] }}")
+	assert.Nil(t, err)
+	content, err = doc.Execute(Params{"person": person})
+	assert.Nil(t, err)
+	assert.Equal(t, "Hello Admin Jack", content)
+}
+
+func TestFileTemplate(t *testing.T) {
+
 }
 
 func TestExprSandBox(t *testing.T) {
-	source := NewSource("{{ a.b.c()[e.f] }}")
+	source := NewSource("{{ person['role'].name }}")
 	ts, _ := Tokenize(source)
 	sb := &sandbox{}
 	doc := NewDocument()

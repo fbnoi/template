@@ -228,9 +228,8 @@ func (ts *TokenStream) Size() int {
 
 func (ts *TokenStream) String() string {
 	sb := &strings.Builder{}
-	for !ts.IsEOF() {
-		t, _ := ts.Next()
-		sb.WriteString(t.value)
+	for _, t := range ts.tokens {
+		sb.WriteString(t.String())
 	}
 
 	return sb.String()

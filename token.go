@@ -22,8 +22,16 @@ type Token struct {
 	line  int
 }
 
-func (t *Token) String() string {
+func (t *Token) Info() string {
 	return fmt.Sprintf("%s(%s)(%d)", TypeToString(t.typ), t.value, t.line)
+}
+
+func (t *Token) String() string {
+	if t.typ == TYPE_STRING {
+		return "'" + t.value + "'"
+	}
+
+	return t.value
 }
 
 func (t *Token) Value() string {

@@ -79,7 +79,7 @@ func index(value reflect.Value, index reflect.Value) (reflect.Value, error) {
 		cap := value.Len()
 		x, err := prepareValueType(index, reflect.TypeOf(int(0)))
 		if err != nil {
-			return zeroValue, errors.Errorf("con't use type %s as array or slice index", index.Type())
+			return zeroValue, errors.Errorf("con't use type %s as array/slice/string index", index.Type())
 		}
 		if x.Int() < 0 || int(x.Int()+1) > cap {
 			return zeroValue, errors.Errorf("out of boundary, got %d", x.Int())
@@ -101,7 +101,7 @@ func index(value reflect.Value, index reflect.Value) (reflect.Value, error) {
 			}
 		}
 		if !keyExist {
-			return zeroValue, errors.Errorf("index %s don't exist in map keys %s", x, keys)
+			return zeroValue, errors.Errorf("index %s doesn't exist in map keys %s", x, keys)
 		}
 
 		return value.MapIndex(x), nil
