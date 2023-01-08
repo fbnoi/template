@@ -1,6 +1,7 @@
 package template
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -89,7 +90,7 @@ func buildSource(source *Source) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc := &Document{}
+	doc := NewDocument()
 	err = build(doc, stream)
 
 	return doc, err
@@ -131,6 +132,37 @@ func PutExprSandbox(sb *exprSandbox) {
 	exprSandboxPool.Put(sb)
 }
 
+func parseJsonParams(stream *TokenStream) (string, error) {
+	sb := &strings.Builder{}
+	bracketLock := 0
+	for !stream.IsEOF() {
+		token, err := stream.Next()
+		if err != nil {
+			return "", err
+		}
+		sb.WriteString(token.value)
+		if token.value == ":" {
+			if pt, err := stream.Peek(1); err == nil && (pt.typ == TYPE_NAME || pt.value == "(") {
+				sb.WriteString("\"")
+			}
+		}
+
+		if token.typ == TYPE_NAME || token.value == ")]" {
+			if pt, err := stream.Peek(1); err == nil && (pt.value == "," || pt.value == "}") && bracketLock == 0 {
+				sb.WriteString("\"")
+			}
+		}
+
+		if strings.Contains("([", token.value) {
+			bracketLock++
+		} else if strings.Contains(")]", token.value) {
+			bracketLock--
+		}
+	}
+
+	return sb.String(), nil
+}
+
 type sandbox struct {
 	cursor AppendAble
 	stack  []AppendAble
@@ -166,25 +198,25 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 			sb.cursor.Append(node)
 
 		case TYPE_COMMAND_START:
-			token, _ := stream.Next()
+			token, _ = stream.Next()
 			switch token.value {
 			case "endblock":
 				if _, ok := sb.cursor.(*BlockDirect); !ok {
 					return newUnexpectedToken(token)
 				}
-				sb.popStack()
+				sb.cursor = sb.popStack()
 
 			case "endif":
 				if _, ok := sb.cursor.(*IfDirect); !ok {
 					return newUnexpectedToken(token)
 				}
-				sb.popStack()
+				sb.cursor = sb.popStack()
 
 			case "endfor":
 				if _, ok := sb.cursor.(*ForDirect); !ok {
 					return newUnexpectedToken(token)
 				}
-				sb.popStack()
+				sb.cursor = sb.popStack()
 
 			case "extend":
 				node := &ExtendDirect{}
@@ -228,13 +260,27 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 						return newUnexpectedToken(token)
 					}
 					subStream := stream.SubStream(i, stream.CurrentIndex())
-					box := GetExprSandbox()
-					defer PutExprSandbox(box)
-					if err := box.build(subStream); err != nil {
+					str, err := parseJsonParams(subStream)
+					if err != nil {
 						return err
 					}
-					node.Params = box.expr
-				} else if token.Type() != TYPE_COMMAND_END {
+					ps := Params{}
+					if err := json.Unmarshal([]byte(str), &ps); err != nil {
+						return err
+					}
+					if token, err := stream.Next(); err != nil {
+						return err
+					} else if token.Value() == "only" {
+						node.Only = true
+						if token, err := stream.Next(); err != nil {
+							return err
+						} else if token.typ != TYPE_COMMAND_END {
+							return newUnexpectedToken(token)
+						}
+					} else if token.typ != TYPE_COMMAND_END {
+						return newUnexpectedToken(token)
+					}
+				} else if token.typ != TYPE_COMMAND_END {
 					return newUnexpectedToken(token)
 				}
 				sb.cursor.Append(node)
@@ -245,11 +291,12 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					return newUnexpectedToken(token)
 				}
 				node := &BlockDirect{Name: &BasicLit{Kind: TYPE_STRING, Value: token}}
-				sb.pushStack(node)
 				if _, ok := doc.blocks[token.value]; ok {
 					return errors.Errorf("block %s has already exist", token.value)
 				}
 				doc.blocks[token.value] = node
+				sb.cursor.Append(node)
+				sb.cursor = sb.pushStack(node)
 
 			case "set":
 				node := &AssignDirect{}
@@ -330,25 +377,35 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 				node.Cond = box.expr
 				sb.cursor.Append(node)
-				sb.pushStack(node)
+				sb.cursor = sb.pushStack(node)
 
 			case "for": // for key, value in list, for value in list, for key, _ in list
 				node := &ForDirect{}
-				token, _ = stream.Next()
-				if token.Type() != TYPE_NAME {
-					return newUnexpectedToken(token)
+				kToken, err := stream.Next()
+				if err != nil {
+					return err
 				}
-				pTok, _ := stream.Peek(1)
-				if pTok.value != "," {
-					node.Value = &Ident{Name: token}
+				if kToken.Type() != TYPE_NAME {
+					return newUnexpectedToken(kToken)
+				}
+				vToken, err := stream.Next()
+				if err != nil {
+					return err
+				}
+				if vToken.value == "in" {
+					node.Value = &Ident{Name: vToken}
+				} else if vToken.value == "," {
+					if vToken, err = stream.Next(); err != nil {
+						return err
+					}
+					node.Key, node.Value = &Ident{Name: kToken}, &Ident{Name: vToken}
+					if nToken, err := stream.Next(); err != nil {
+						return err
+					} else if nToken.value != "in" {
+						return newUnexpectedToken(nToken)
+					}
 				} else {
-					node.Key = &Ident{Name: token}
-					token, _ = stream.Skip(1)
-					node.Value = &Ident{Name: token}
-				}
-				token, _ = stream.Next()
-				if token.value != "in" {
-					return newUnexpectedToken(token)
+					return newUnexpectedToken(vToken)
 				}
 				token, _ = stream.Next()
 				i := stream.CurrentIndex()
@@ -366,7 +423,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 				node.X = box.expr
 				sb.cursor.Append(node)
-				sb.pushStack(node)
+				sb.cursor = sb.pushStack(node)
 
 			default:
 				return newUnexpectedToken(token)
@@ -378,14 +435,17 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 	return nil
 }
 
-func (sb *sandbox) pushStack(node AppendAble) {
+func (sb *sandbox) pushStack(node AppendAble) AppendAble {
 	sb.stack = append(sb.stack, sb.cursor)
-	sb.cursor = node
+
+	return node
 }
 
-func (sb *sandbox) popStack() {
-	sb.cursor = sb.stack[len(sb.stack)-1]
+func (sb *sandbox) popStack() AppendAble {
+	tmp := sb.stack[len(sb.stack)-1]
 	sb.stack = sb.stack[:len(sb.stack)-1]
+
+	return tmp
 }
 
 func (sb *sandbox) shiftStack(node AppendAble) {

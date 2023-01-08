@@ -56,14 +56,7 @@ func TestTemplate(t *testing.T) {
 }
 
 func TestFileTemplate(t *testing.T) {
-
-}
-
-func TestExprSandBox(t *testing.T) {
-	source := NewSource("{{ person['role'].name }}")
-	ts, _ := Tokenize(source)
-	sb := &sandbox{}
-	doc := NewDocument()
-	err := sb.build(doc, ts)
-	log.Print(err)
+	doc, err := BuildFileTemplate("../var/template/block_test.html.tpl")
+	assert.Nil(t, err)
+	log.Print(doc)
 }

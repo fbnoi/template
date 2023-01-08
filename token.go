@@ -28,7 +28,7 @@ func (t *Token) Info() string {
 
 func (t *Token) String() string {
 	if t.typ == TYPE_STRING {
-		return "'" + t.value + "'"
+		return "\"" + t.value + "\""
 	}
 
 	return t.value

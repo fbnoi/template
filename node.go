@@ -38,6 +38,11 @@ type AppendAble interface {
 	Append(Direct)
 }
 
+type DirectParam struct {
+	Name  string
+	Value Expr
+}
+
 // ----------------------------------------------------------------------------
 // ExprNode
 
@@ -142,13 +147,13 @@ type (
 	BlockDirect struct {
 		Name *BasicLit      // name of block; not nil
 		Body *SectionDirect // body of block; not nil
-		Doc  *Document
 	}
 
 	IncludeDirect struct {
-		Path   *BasicLit // string of template path
-		Params Expr      // parameters injected into block
-		Doc    *Document // not nil
+		Path   *BasicLit      // string of template path
+		Params []*DirectParam // parameters injected into include doc
+		Doc    *Document      // not nil
+		Only   bool
 	}
 
 	ExtendDirect struct {

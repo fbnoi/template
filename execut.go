@@ -273,13 +273,29 @@ func (d *BlockDirect) Execute(p Params) (string, error) {
 
 func (d *IncludeDirect) Execute(p Params) (string, error) {
 	if d.Params != nil {
-		if pv, err := d.Params.Execute(p); err != nil {
-			return "", err
-		} else if pv.CanConvert(reflect.TypeOf(make(Params))) {
-			np := pv.Convert(reflect.TypeOf(make(Params)))
+		if d.Only {
+			p = Params{}
+			// for k, v := range d.Params {
+			// 	if vs, ok := v.(string); ok && strings.HasPrefix(vs, "$") {
+			// 		vs = strings.TrimPrefix(vs, "$")
+			// 		esb := GetExprSandbox()
+			// 		source := NewSource(vs)
+			// 		if stream, err := Tokenize(source); err != nil {
 
-			return d.Doc.Body.Execute(np.Interface().(Params))
+			// 		}
+			// 	}
+			// 	if strings.HasPrefix(v.(string), "$") {
+
+			// 	}
+			// }
 		}
+		// if pv, err := d.Params.Execute(p); err != nil {
+		// 	return "", err
+		// } else if pv.CanConvert(reflect.TypeOf(make(Params))) {
+		// 	np := pv.Convert(reflect.TypeOf(make(Params)))
+
+		// 	return d.Doc.Body.Execute(np.Interface().(Params))
+		// }
 	}
 
 	return d.Doc.Body.Execute(p)
