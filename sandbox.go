@@ -1,7 +1,6 @@
 package template
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -132,37 +131,6 @@ func PutExprSandbox(sb *exprSandbox) {
 	exprSandboxPool.Put(sb)
 }
 
-func parseJsonParams(stream *TokenStream) (string, error) {
-	sb := &strings.Builder{}
-	bracketLock := 0
-	for !stream.IsEOF() {
-		token, err := stream.Next()
-		if err != nil {
-			return "", err
-		}
-		sb.WriteString(token.value)
-		if token.value == ":" {
-			if pt, err := stream.Peek(1); err == nil && (pt.typ == TYPE_NAME || pt.value == "(") {
-				sb.WriteString("\"")
-			}
-		}
-
-		if token.typ == TYPE_NAME || token.value == ")]" {
-			if pt, err := stream.Peek(1); err == nil && (pt.value == "," || pt.value == "}") && bracketLock == 0 {
-				sb.WriteString("\"")
-			}
-		}
-
-		if strings.Contains("([", token.value) {
-			bracketLock++
-		} else if strings.Contains(")]", token.value) {
-			bracketLock--
-		}
-	}
-
-	return sb.String(), nil
-}
-
 type sandbox struct {
 	cursor AppendAble
 	stack  []AppendAble
@@ -170,162 +138,145 @@ type sandbox struct {
 
 func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 	sb.cursor = doc
+	var (
+		token     *Token
+		err       error
+		node      Direct
+		subStream *TokenStream
+		box       *exprSandbox
+		ok        bool
+		baseDoc   *Document
+	)
 	for stream.HasNext() {
-		token, _ := stream.Next()
+		if token, err = stream.Next(); err != nil {
+			return err
+		}
+
 		switch token.Type() {
 		case TYPE_EOF:
 			return nil
 
 		case TYPE_TEXT:
-			node := &TextDirect{Text: &BasicLit{Kind: TYPE_STRING, Value: token}}
+			node = &TextDirect{Text: &BasicLit{Kind: TYPE_STRING, Value: token}}
 			sb.cursor.Append(node)
 
 		case TYPE_VAR_START:
-			i := stream.CurrentIndex() + 1
-			for token.Type() != TYPE_VAR_END {
-				token, _ = stream.Next()
-			}
-			if i >= stream.CurrentIndex() {
-				return newUnexpectedToken(token)
-			}
-			subStream := stream.SubStream(i, stream.CurrentIndex())
-			box := GetExprSandbox()
-			defer PutExprSandbox(box)
-			if err := box.build(subStream); err != nil {
+			if subStream, err = subStreamIf(stream, func(t *Token) bool {
+				return t.typ != TYPE_VAR_END
+			}); err != nil {
 				return err
+			} else {
+				box = GetExprSandbox()
+				if err = box.build(subStream); err != nil {
+					return err
+				}
+				node = &ValueDirect{Tok: box.expr}
+				sb.cursor.Append(node)
 			}
-			node := &ValueDirect{Tok: box.expr}
-			sb.cursor.Append(node)
 
 		case TYPE_COMMAND_START:
-			token, _ = stream.Next()
+			token, err = stream.Next()
+			if err != nil {
+				return err
+			}
 			switch token.value {
 			case "endblock":
-				if _, ok := sb.cursor.(*BlockDirect); !ok {
+				if _, ok = sb.cursor.(*BlockDirect); !ok {
 					return newUnexpectedToken(token)
 				}
 				sb.cursor = sb.popStack()
 
 			case "endif":
-				if _, ok := sb.cursor.(*IfDirect); !ok {
+				if _, ok = sb.cursor.(*IfDirect); !ok {
 					return newUnexpectedToken(token)
 				}
 				sb.cursor = sb.popStack()
 
 			case "endfor":
-				if _, ok := sb.cursor.(*ForDirect); !ok {
+				if _, ok = sb.cursor.(*ForDirect); !ok {
 					return newUnexpectedToken(token)
 				}
 				sb.cursor = sb.popStack()
 
 			case "extend":
-				node := &ExtendDirect{}
-				token, _ := stream.Next()
-				if token.Type() != TYPE_STRING {
-					return newUnexpectedToken(token)
+				node = &ExtendDirect{}
+				if token, err = nextTokenTypeShouldBe(stream, TYPE_STRING); err != nil {
+					return err
 				}
-				node.Path = &BasicLit{Kind: token.Type(), Value: token}
+				node.(*ExtendDirect).Path = &BasicLit{Kind: token.typ, Value: token}
 				if baseDoc, err := BuildFileTemplate(token.value); err != nil {
 					return err
 				} else {
 					baseDoc.extended = true
-					node.Doc = baseDoc
+					node.(*ExtendDirect).Doc = baseDoc
 				}
-				doc.Extend = node
-				token, _ = stream.Next()
-				if token.Type() != TYPE_COMMAND_END {
-					return newUnexpectedToken(token)
-				}
+				doc.Extend = node.(*ExtendDirect)
 
 			case "include":
-				node := &IncludeDirect{}
-				token, _ := stream.Next()
-				if token.Type() != TYPE_STRING {
-					return newUnexpectedToken(token)
+				node = &IncludeDirect{}
+				if token, err = nextTokenTypeShouldBe(stream, TYPE_STRING); err != nil {
+					return err
 				}
-				node.Path = &BasicLit{Kind: token.Type(), Value: token}
-				if baseDoc, err := BuildFileTemplate(node.Path.Value.value); err != nil {
+				node.(*IncludeDirect).Path = &BasicLit{Kind: token.typ, Value: token}
+				if baseDoc, err = BuildFileTemplate(token.value); err != nil {
 					return err
 				} else {
-					node.Doc = baseDoc
+					node.(*IncludeDirect).Doc = baseDoc
 				}
-				token, _ = stream.Next()
+				if token, err = stream.Next(); err != nil {
+					return err
+				}
 				if token.value == "with" {
-					token, _ = stream.Next()
-					i := stream.CurrentIndex()
-					for token.Type() != TYPE_COMMAND_END {
-						token, _ = stream.Next()
-					}
-					if i >= stream.CurrentIndex() {
-						return newUnexpectedToken(token)
-					}
-					subStream := stream.SubStream(i, stream.CurrentIndex())
-					str, err := parseJsonParams(subStream)
-					if err != nil {
+					if subStream, err = subStreamIf(stream, func(t *Token) bool {
+						return t.typ != TYPE_COMMAND_END && t.value != "only"
+					}); err != nil {
 						return err
 					}
-					ps := Params{}
-					if err := json.Unmarshal([]byte(str), &ps); err != nil {
+					box = GetExprSandbox()
+					if err = box.build(subStream); err != nil {
 						return err
 					}
-					if token, err := stream.Next(); err != nil {
+					node.(*IncludeDirect).Params = box.expr
+
+					if token, err := stream.Current(); err != nil {
 						return err
-					} else if token.Value() == "only" {
-						node.Only = true
-						if token, err := stream.Next(); err != nil {
-							return err
-						} else if token.typ != TYPE_COMMAND_END {
-							return newUnexpectedToken(token)
-						}
-					} else if token.typ != TYPE_COMMAND_END {
-						return newUnexpectedToken(token)
+					} else if token.value == "only" {
+						node.(*IncludeDirect).Only = true
 					}
-				} else if token.typ != TYPE_COMMAND_END {
-					return newUnexpectedToken(token)
 				}
 				sb.cursor.Append(node)
 
 			case "block":
-				token, _ := stream.Next()
-				if token.Type() != TYPE_NAME {
-					return newUnexpectedToken(token)
+				if token, err = nextTokenTypeShouldBe(stream, TYPE_NAME); err != nil {
+					return err
 				}
-				node := &BlockDirect{Name: &BasicLit{Kind: TYPE_STRING, Value: token}}
+				node = &BlockDirect{Name: &BasicLit{Kind: TYPE_STRING, Value: token}}
 				if _, ok := doc.blocks[token.value]; ok {
 					return errors.Errorf("block %s has already exist", token.value)
 				}
-				doc.blocks[token.value] = node
+				doc.blocks[token.value] = node.(*BlockDirect)
 				sb.cursor.Append(node)
-				sb.cursor = sb.pushStack(node)
+				sb.cursor = sb.pushStack(node.(*BlockDirect))
 
 			case "set":
-				node := &AssignDirect{}
-				token, _ = stream.Next()
-				if token.Type() != TYPE_NAME {
-					return newUnexpectedToken(token)
-				}
-				node.Lh = &Ident{Name: token}
-
-				token, _ = stream.Next()
-				if token.value != "=" {
-					return newUnexpectedToken(token)
-				}
-
-				token, _ = stream.Next()
-				i := stream.CurrentIndex()
-				for token.Type() != TYPE_COMMAND_END {
-					token, _ = stream.Next()
-				}
-				if i >= stream.CurrentIndex() {
-					return newUnexpectedToken(token)
-				}
-				subStream := stream.SubStream(i, stream.CurrentIndex())
-				box := GetExprSandbox()
-				defer PutExprSandbox(box)
-				if err := box.build(subStream); err != nil {
+				node = &AssignDirect{}
+				if token, err = nextTokenTypeShouldBe(stream, TYPE_NAME); err != nil {
 					return err
 				}
-				node.Rh = box.expr
+				node.(*AssignDirect).Lh = &Ident{Name: token}
+				if _, err = nextTokenValueShouldBe(stream, "="); err != nil {
+					return err
+				}
+				if subStream, err = subStreamIf(stream, func(t *Token) bool {
+					return t.typ != TYPE_COMMAND_END
+				}); err != nil {
+					return err
+				}
+				box = GetExprSandbox()
+				if err = box.build(subStream); err != nil {
+					return err
+				}
+				node.(*AssignDirect).Rh = box.expr
 				sb.cursor.Append(node)
 
 			case "elseif":
@@ -333,24 +284,19 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				if !ok {
 					return newUnexpectedToken(token)
 				}
-				node := &IfDirect{}
-				token, _ = stream.Next()
-				i := stream.CurrentIndex()
-				for token.Type() != TYPE_COMMAND_END {
-					token, _ = stream.Next()
-				}
-				if i >= stream.CurrentIndex() {
-					return newUnexpectedToken(token)
-				}
-				subStream := stream.SubStream(i, stream.CurrentIndex())
-				box := GetExprSandbox()
-				defer PutExprSandbox(box)
-				if err := box.build(subStream); err != nil {
+				if subStream, err = subStreamIf(stream, func(t *Token) bool {
+					return t.typ != TYPE_COMMAND_END
+				}); err != nil {
 					return err
 				}
-				node.Cond = box.expr
+				box = GetExprSandbox()
+				if err = box.build(subStream); err != nil {
+					return err
+				}
+				node = &IfDirect{}
+				node.(*IfDirect).Cond = box.expr
 				ifNode.Else = node
-				sb.shiftStack(node)
+				sb.shiftStack(node.(*IfDirect))
 
 			case "else":
 				_, ok := sb.cursor.(*IfDirect)
@@ -359,76 +305,72 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 				sb.cursor.(*IfDirect).Else = &SectionDirect{}
 
-			case "if": // if condition
-				node := &IfDirect{}
-				token, _ = stream.Next()
-				i := stream.CurrentIndex()
-				for token.Type() != TYPE_COMMAND_END {
-					token, _ = stream.Next()
-				}
-				if i >= stream.CurrentIndex() {
-					return newUnexpectedToken(token)
-				}
-				subStream := stream.SubStream(i, stream.CurrentIndex())
-				box := GetExprSandbox()
-				defer PutExprSandbox(box)
-				if err := box.build(subStream); err != nil {
+			case "if":
+				if subStream, err = subStreamIf(stream, func(t *Token) bool {
+					return t.typ != TYPE_COMMAND_END
+				}); err != nil {
 					return err
 				}
-				node.Cond = box.expr
+				node = &IfDirect{}
+				box = GetExprSandbox()
+				if err = box.build(subStream); err != nil {
+					return err
+				}
+				node.(*IfDirect).Cond = box.expr
 				sb.cursor.Append(node)
-				sb.cursor = sb.pushStack(node)
+				sb.cursor = sb.pushStack(node.(*IfDirect))
 
-			case "for": // for key, value in list, for value in list, for key, _ in list
-				node := &ForDirect{}
-				kToken, err := stream.Next()
-				if err != nil {
+			case "for":
+				if subStream, err = subStreamIf(stream, func(t *Token) bool {
+					return t.value != "in"
+				}); err != nil {
 					return err
 				}
-				if kToken.Type() != TYPE_NAME {
-					return newUnexpectedToken(kToken)
-				}
-				vToken, err := stream.Next()
-				if err != nil {
-					return err
-				}
-				if vToken.value == "in" {
-					node.Value = &Ident{Name: vToken}
-				} else if vToken.value == "," {
-					if vToken, err = stream.Next(); err != nil {
+				node = &ForDirect{}
+				switch subStream.Size() {
+				case 2:
+					if token, err = nextTokenTypeShouldBe(subStream, TYPE_NAME); err != nil {
 						return err
 					}
-					node.Key, node.Value = &Ident{Name: kToken}, &Ident{Name: vToken}
-					if nToken, err := stream.Next(); err != nil {
+					node.(*ForDirect).Value = &Ident{Name: token}
+				case 4:
+					if token, err = nextTokenTypeShouldBe(subStream, TYPE_NAME); err != nil {
 						return err
-					} else if nToken.value != "in" {
-						return newUnexpectedToken(nToken)
 					}
-				} else {
-					return newUnexpectedToken(vToken)
+					node.(*ForDirect).Key = &Ident{Name: token}
+					subStream.Skip(1)
+					if token, err = nextTokenTypeShouldBe(subStream, TYPE_NAME); err != nil {
+						return err
+					}
+					node.(*ForDirect).Value = &Ident{Name: token}
+				default:
+					return errors.Errorf("Unexpected arg list %s in for loop", subStream.String())
 				}
-				token, _ = stream.Next()
-				i := stream.CurrentIndex()
-				for token.Type() != TYPE_COMMAND_END {
-					token, _ = stream.Next()
-				}
-				if i >= stream.CurrentIndex() {
-					return newUnexpectedToken(token)
-				}
-				subStream := stream.SubStream(i, stream.CurrentIndex())
-				box := GetExprSandbox()
-				defer PutExprSandbox(box)
-				if err := box.build(subStream); err != nil {
+
+				if subStream, err = subStreamIf(stream, func(t *Token) bool {
+					return t.typ != TYPE_COMMAND_END
+				}); err != nil {
 					return err
 				}
-				node.X = box.expr
+				box = GetExprSandbox()
+				if err = box.build(subStream); err != nil {
+					return err
+				}
+				node.(*ForDirect).X = box.expr
 				sb.cursor.Append(node)
-				sb.cursor = sb.pushStack(node)
+				sb.cursor = sb.pushStack(node.(*ForDirect))
 
 			default:
 				return newUnexpectedToken(token)
 
 			}
+
+		case TYPE_COMMAND_END, TYPE_VAR_END:
+			continue
+
+		default:
+			return newUnexpectedToken(token)
+
 		}
 	}
 
@@ -635,4 +577,55 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 	}
 
 	return nil
+}
+
+func subStreamIf(ts *TokenStream, fn func(t *Token) bool) (*TokenStream, error) {
+	if _, err := ts.Skip(1); err != nil {
+		return nil, err
+	}
+	start := ts.current
+	for ts.HasNext() {
+		if token, err := ts.Next(); err != nil {
+			return nil, err
+		} else if !fn(token) {
+			break
+		}
+	}
+	if start == ts.current {
+		if token, err := ts.Current(); err != nil {
+			return nil, err
+		} else {
+			return nil, newUnexpectedToken(token)
+		}
+	}
+	le := ts.current - start
+	var tokens = make([]*Token, le+1)
+	copy(tokens, ts.tokens[start:ts.current])
+	tokens[le] = newToken(TYPE_EOF, "", ts.tokens[ts.current-1].Line())
+
+	return &TokenStream{Source: ts.Source, tokens: tokens, current: -1}, nil
+}
+
+func nextTokenValueShouldBe(ts *TokenStream, value string) (*Token, error) {
+	if token, err := ts.Next(); err != nil {
+		return nil, err
+	} else if token.value != value {
+		return nil, newUnexpectedToken(token)
+	} else {
+		return token, nil
+	}
+}
+
+func nextTokenTypeShouldBe(ts *TokenStream, typ int) (*Token, error) {
+	var (
+		token *Token
+		err   error
+	)
+	if token, err = ts.Next(); err != nil {
+		return nil, err
+	} else if token.typ != typ {
+		return nil, newUnexpectedToken(token)
+	} else {
+		return token, nil
+	}
 }

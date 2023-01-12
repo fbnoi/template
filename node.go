@@ -150,9 +150,9 @@ type (
 	}
 
 	IncludeDirect struct {
-		Path   *BasicLit      // string of template path
-		Params []*DirectParam // parameters injected into include doc
-		Doc    *Document      // not nil
+		Path   *BasicLit // string of template path
+		Params Expr      // parameters injected into include doc
+		Doc    *Document // not nil
 		Only   bool
 	}
 
