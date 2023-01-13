@@ -48,13 +48,17 @@ var (
 
 func Tokenize(source *Source) (*TokenStream, error) {
 	var (
-		code     = reg_enter.ReplaceAllString(source.Code, "\n")
-		stream   = &TokenStream{Source: source, current: -1}
-		poss     = reg_token_start.FindAllStringIndex(code, -1)
-		cursor   = 0
-		line     = 0
-		posIndex = 0
-		codeLen  = len(code)
+		code            = reg_enter.ReplaceAllString(source.Code, "\n")
+		stream          = &TokenStream{Source: source, current: -1}
+		poss            = reg_token_start.FindAllStringIndex(code, -1)
+		cursor          = 0
+		line            = 0
+		posIndex        = 0
+		codeLen         = len(code)
+		pos, ends, sPos []int
+		bracket, word   string
+		brackets        []*Bracket
+		end, length     int
 	)
 
 	moveCursor := func(n int) {
@@ -67,7 +71,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 		cursor = len(code)
 	}
 	for posIndex < len(poss) {
-		pos := poss[posIndex]
+		pos = poss[posIndex]
 		if pos[0] < cursor {
 			posIndex++
 			continue
@@ -79,7 +83,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 		switch code[pos[0]:pos[1]] {
 		case TAG_ESCAPE_COMMENT[0]:
 			moveCursor(pos[0] + 1)
-			ends := reg_comment.FindStringIndex(code[cursor:])
+			ends = reg_comment.FindStringIndex(code[cursor:])
 			if ends == nil {
 				return nil, &UnClosedToken{Line: line, token: TAG_ESCAPE_COMMENT[0]}
 			}
@@ -87,7 +91,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 			moveCursor(cursor + ends[1])
 		case TAG_ESCAPE_BLOCK[0]:
 			moveCursor(pos[0] + 1)
-			ends := reg_block.FindStringIndex(code[cursor:])
+			ends = reg_block.FindStringIndex(code[cursor:])
 			if ends == nil {
 				return nil, &UnClosedToken{Line: line, token: TAG_ESCAPE_BLOCK[0]}
 			}
@@ -95,14 +99,14 @@ func Tokenize(source *Source) (*TokenStream, error) {
 			moveCursor(cursor + ends[1])
 		case TAG_ESCAPE_VARIABLE[0]:
 			moveCursor(pos[0] + 1)
-			ends := reg_variable.FindStringIndex(code[cursor:])
+			ends = reg_variable.FindStringIndex(code[cursor:])
 			if ends == nil {
 				return nil, &UnClosedToken{Line: line, token: TAG_ESCAPE_VARIABLE[0]}
 			}
 			stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:cursor+ends[1]], line))
 			moveCursor(cursor + ends[1])
 		case TAG_COMMENT[0]:
-			ends := reg_comment.FindStringIndex(code[cursor:])
+			ends = reg_comment.FindStringIndex(code[cursor:])
 			if ends == nil {
 				return nil, &UnClosedToken{Line: line, token: TAG_COMMENT[0]}
 			}
@@ -122,54 +126,53 @@ func Tokenize(source *Source) (*TokenStream, error) {
 		}
 		stream.tokens = append(stream.tokens, token)
 		moveCursor(cursor + 2)
-		ends := reg.FindStringIndex(code[cursor:])
+		ends = reg.FindStringIndex(code[cursor:])
 		if ends == nil {
 			return nil, &UnClosedToken{Line: line, token: TAG_BLOCK[0]}
 		}
-		length := ends[1] - ends[0]
-		end := cursor + ends[0]
-		var brackets []*Bracket
+		length = ends[1] - ends[0]
+		end = cursor + ends[0]
+
 		for cursor < end {
-			if sPos := reg_whitespace.FindStringIndex(code[cursor:end]); sPos != nil {
+			if sPos = reg_whitespace.FindStringIndex(code[cursor:end]); sPos != nil {
 				moveCursor(cursor + sPos[1])
 				continue
 			}
-			if sPos := reg_operator.FindStringIndex(code[cursor:end]); sPos != nil {
+			if sPos = reg_operator.FindStringIndex(code[cursor:end]); sPos != nil {
 				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
-			} else if sPos := reg_word.FindStringIndex(code[cursor:end]); sPos != nil {
-				word := code[cursor : cursor+sPos[1]]
+			} else if sPos = reg_word.FindStringIndex(code[cursor:end]); sPos != nil {
+				word = code[cursor : cursor+sPos[1]]
 				moveCursor(cursor + sPos[1])
 				if isWordOperator(word) {
 					stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, word, line))
 					continue
 				}
 				stream.tokens = append(stream.tokens, newToken(TYPE_NAME, word, line))
-			} else if sPos := reg_number.FindStringIndex(code[cursor:end]); sPos != nil {
+			} else if sPos = reg_number.FindStringIndex(code[cursor:end]); sPos != nil {
 				stream.tokens = append(stream.tokens, newToken(TYPE_NUMBER, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
-			} else if sPos := reg_string.FindStringIndex(code[cursor:end]); sPos != nil {
+			} else if sPos = reg_string.FindStringIndex(code[cursor:end]); sPos != nil {
 				str := strings.Trim(code[cursor:cursor+sPos[1]], "\"'")
 				stream.tokens = append(stream.tokens, newToken(TYPE_STRING, str, line))
 				moveCursor(cursor + sPos[1])
-			} else if sPos := reg_punctuation.FindStringIndex(code[cursor:end]); sPos != nil {
+			} else if sPos = reg_punctuation.FindStringIndex(code[cursor:end]); sPos != nil {
 				stream.tokens = append(stream.tokens, newToken(TYPE_PUNCTUATION, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
-			} else if sPos := reg_bracket.FindStringIndex(code[cursor:end]); sPos != nil {
-				bracket := code[cursor+sPos[0] : cursor+sPos[1]]
+			} else if sPos = reg_bracket.FindStringIndex(code[cursor:end]); sPos != nil {
+				bracket = code[cursor+sPos[0] : cursor+sPos[1]]
 				if reg_bracket_open.MatchString(bracket) {
 					brackets = append(brackets, &Bracket{ch: bracket, Line: line})
 				} else if reg_bracket_close.MatchString(bracket) {
 					if len(brackets) == 0 {
 						return nil, &UnexpectedToken{Line: line, token: bracket}
 					}
-					opBracket := brackets[len(brackets)-1]
 					switch {
-					case opBracket.ch == "(" && bracket != ")":
+					case brackets[len(brackets)-1].ch == "(" && bracket != ")":
 						return nil, &UnexpectedToken{Line: line, token: bracket}
-					case opBracket.ch == "[" && bracket != "]":
+					case brackets[len(brackets)-1].ch == "[" && bracket != "]":
 						return nil, &UnexpectedToken{Line: line, token: bracket}
-					case opBracket.ch == "{" && bracket != "}":
+					case brackets[len(brackets)-1].ch == "{" && bracket != "}":
 						return nil, &UnexpectedToken{Line: line, token: bracket}
 					}
 					brackets = brackets[:len(brackets)-1]
@@ -222,10 +225,6 @@ type TokenStream struct {
 	Source  *Source
 	tokens  []*Token
 	current int
-}
-
-func (ts *TokenStream) ResetCursor() {
-	ts.current = -1
 }
 
 func (ts *TokenStream) Size() int {
@@ -283,18 +282,6 @@ func (ts *TokenStream) Peek(n int) (*Token, error) {
 
 func (ts *TokenStream) IsEOF() bool {
 	return ts.current != -1 && TYPE_EOF == ts.tokens[ts.current].Type()
-}
-
-func (ts *TokenStream) SubStream(start, end int) *TokenStream {
-	var tokens = make([]*Token, end-start)
-	copy(tokens, ts.tokens[start:end])
-	tokens = append(tokens, newToken(TYPE_EOF, "", ts.tokens[end-1].Line()))
-
-	return &TokenStream{Source: ts.Source, tokens: tokens, current: -1}
-}
-
-func (ts *TokenStream) CurrentIndex() int {
-	return ts.current
 }
 
 func isWordOperator(word string) bool {

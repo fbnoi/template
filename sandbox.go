@@ -10,11 +10,7 @@ import (
 
 var (
 	rank = map[string]int{
-		"(":   0,
-		")":   0,
 		".":   1,
-		"[":   2,
-		"]":   2,
 		"*":   3,
 		"/":   3,
 		"+":   4,
@@ -96,8 +92,8 @@ func buildSource(source *Source) (*Document, error) {
 }
 
 func build(doc *Document, stream *TokenStream) error {
-	sb := GetSandbox()
-	defer PutSandbox(sb)
+	sb := getSandbox()
+	defer putSandbox(sb)
 	err := sb.build(doc, stream)
 
 	return err
@@ -113,20 +109,20 @@ func allowOp(op *Token) bool {
 	return ok
 }
 
-func GetSandbox() *sandbox {
+func getSandbox() *sandbox {
 	return sandboxPool.Get().(*sandbox)
 }
 
-func PutSandbox(sb *sandbox) {
+func putSandbox(sb *sandbox) {
 	sb.reset()
 	sandboxPool.Put(sb)
 }
 
-func GetExprSandbox() *exprSandbox {
+func getExprSandbox() *exprSandbox {
 	return exprSandboxPool.Get().(*exprSandbox)
 }
 
-func PutExprSandbox(sb *exprSandbox) {
+func putExprSandbox(sb *exprSandbox) {
 	sb.reset()
 	exprSandboxPool.Put(sb)
 }
@@ -146,7 +142,15 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 		box       *exprSandbox
 		ok        bool
 		baseDoc   *Document
+		boxes     []*exprSandbox
 	)
+
+	defer func(boxes []*exprSandbox) {
+		for _, box := range boxes {
+			putExprSandbox(box)
+		}
+	}(boxes)
+
 	for stream.HasNext() {
 		if token, err = stream.Next(); err != nil {
 			return err
@@ -166,7 +170,8 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 			}); err != nil {
 				return err
 			} else {
-				box = GetExprSandbox()
+				box = getExprSandbox()
+				boxes = append(boxes, box)
 				if err = box.build(subStream); err != nil {
 					return err
 				}
@@ -232,7 +237,8 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					}); err != nil {
 						return err
 					}
-					box = GetExprSandbox()
+					box = getExprSandbox()
+					boxes = append(boxes, box)
 					if err = box.build(subStream); err != nil {
 						return err
 					}
@@ -272,7 +278,8 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}); err != nil {
 					return err
 				}
-				box = GetExprSandbox()
+				box = getExprSandbox()
+				boxes = append(boxes, box)
 				if err = box.build(subStream); err != nil {
 					return err
 				}
@@ -289,7 +296,8 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}); err != nil {
 					return err
 				}
-				box = GetExprSandbox()
+				box = getExprSandbox()
+				boxes = append(boxes, box)
 				if err = box.build(subStream); err != nil {
 					return err
 				}
@@ -312,7 +320,8 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					return err
 				}
 				node = &IfDirect{}
-				box = GetExprSandbox()
+				box = getExprSandbox()
+				boxes = append(boxes, box)
 				if err = box.build(subStream); err != nil {
 					return err
 				}
@@ -352,7 +361,8 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}); err != nil {
 					return err
 				}
-				box = GetExprSandbox()
+				box = getExprSandbox()
+				boxes = append(boxes, box)
 				if err = box.build(subStream); err != nil {
 					return err
 				}
@@ -410,8 +420,15 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 	if stream.Size() == 0 {
 		return errors.New("empty stream")
 	}
+	var (
+		topOp *Token
+		token *Token
+		err   error
+	)
 	for stream.HasNext() {
-		token, _ := stream.Next()
+		if token, err = stream.Next(); err != nil {
+			return err
+		}
 		switch token.Type() {
 		case TYPE_NUMBER, TYPE_STRING:
 			b := &BasicLit{Kind: token.Type(), Value: token}
@@ -421,20 +438,19 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 			if strings.Contains(internalKeyWords, fmt.Sprintf("_%s_", token.value)) {
 				return newUnexpectedToken(token)
 			}
-			i := &Ident{Name: token}
 			if !stream.IsEOF() {
 				if nextToken, err := stream.Peek(1); err == nil && nextToken.value == "(" {
-					c := &CallExpr{Func: i}
-					esb.exprStack = append(esb.exprStack, c)
+					esb.exprStack = append(esb.exprStack, &CallExpr{Func: &Ident{Name: token}})
 					continue
 				}
 			}
-			esb.exprStack = append(esb.exprStack, i)
+			esb.exprStack = append(esb.exprStack, &Ident{Name: token})
 
 		case TYPE_OPERATOR:
-			if token.value == ")" {
+			switch token.value {
+			case ")":
 				for {
-					topOp := esb.opStack[len(esb.opStack)-1]
+					topOp = esb.opStack[len(esb.opStack)-1]
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
 					if topOp.value != "(" {
 						esb.mergeExprStack(topOp)
@@ -444,39 +460,60 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 						break
 					}
 				}
-			} else if token.value == "]" {
+
+			case "]":
 				for {
-					topOp := esb.opStack[len(esb.opStack)-1]
+					topOp = esb.opStack[len(esb.opStack)-1]
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
 					esb.mergeExprStack(topOp)
 					if topOp.value == "[" || len(esb.opStack) == 0 {
 						break
 					}
 				}
-			} else {
+
+			case "(":
+				esb.opStack = append(esb.opStack, token)
+
+			case "[":
+				if len(esb.opStack) == 0 {
+					esb.opStack = append(esb.opStack, token)
+					continue
+				}
+				for {
+					topOp = esb.opStack[len(esb.opStack)-1]
+					if topOp.value != "." {
+						break
+					}
+					esb.mergeExprStack(topOp)
+					esb.opStack = esb.opStack[:len(esb.opStack)-1]
+				}
+				esb.opStack = append(esb.opStack, token)
+
+			default:
 				if !allowOp(token) {
 					return newUnexpectedToken(token)
 				}
 				if len(esb.opStack) == 0 {
 					esb.opStack = append(esb.opStack, token)
-				} else {
-					topOp := esb.opStack[len(esb.opStack)-1]
-					for compare(topOp.value, token.value) {
-						esb.mergeExprStack(topOp)
-						esb.opStack = esb.opStack[:len(esb.opStack)-1]
-						if len(esb.opStack) == 0 {
-							break
-						}
-						topOp = esb.opStack[len(esb.opStack)-1]
-					}
-					esb.opStack = append(esb.opStack, token)
+					continue
 				}
+				topOp = esb.opStack[len(esb.opStack)-1]
+				for compare(topOp.value, token.value) {
+					esb.mergeExprStack(topOp)
+					esb.opStack = esb.opStack[:len(esb.opStack)-1]
+					if len(esb.opStack) == 0 {
+						break
+					}
+					topOp = esb.opStack[len(esb.opStack)-1]
+				}
+				esb.opStack = append(esb.opStack, token)
+
 			}
 
 		case TYPE_PUNCTUATION:
 			switch token.value {
 			case ",":
-				topOp := esb.opStack[len(esb.opStack)-1]
+				topOp = esb.opStack[len(esb.opStack)-1]
 				for topOp.value != "(" {
 					esb.mergeExprStack(topOp)
 					esb.opStack = esb.opStack[:len(esb.opStack)-1]
@@ -498,9 +535,9 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 	}
 
 	for i := len(esb.opStack) - 1; i >= 0; i-- {
-		topOp := esb.opStack[i]
+		topOp = esb.opStack[i]
 		esb.opStack = esb.opStack[:i]
-		if err := esb.mergeExprStack(topOp); err != nil {
+		if err = esb.mergeExprStack(topOp); err != nil {
 			return err
 		}
 	}
@@ -508,7 +545,6 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 	if len(esb.exprStack) != 1 {
 		return errors.Errorf("parse expr failed1: %s", stream.String())
 	}
-
 	esb.expr = esb.exprStack[0]
 
 	return nil
@@ -524,28 +560,20 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 	if len(esb.exprStack) < 2 {
 		return newUnexpectedToken(token)
 	}
+	var expr1, expr2 = esb.exprStack[len(esb.exprStack)-1], esb.exprStack[len(esb.exprStack)-2]
 	switch token.value {
 	case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or":
-		expr1 := esb.exprStack[len(esb.exprStack)-2]
-		expr2 := esb.exprStack[len(esb.exprStack)-1]
 		esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
-		b := &BinaryExpr{X: expr1, Op: token, Y: expr2}
-		esb.exprStack = append(esb.exprStack, b)
+		esb.exprStack = append(esb.exprStack, &BinaryExpr{X: expr2, Op: token, Y: expr1})
 
 	case "not", "++", "--":
-		expr1 := esb.exprStack[len(esb.exprStack)-1]
-		expr1 = &SingleExpr{X: expr1, Op: token}
+		esb.exprStack[len(esb.exprStack)-1] = &SingleExpr{X: expr1, Op: token}
 
 	case "[", ".":
-		expr1 := esb.exprStack[len(esb.exprStack)-2]
-		expr2 := esb.exprStack[len(esb.exprStack)-1]
 		esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
-		i := &IndexExpr{X: expr1, Op: token, Index: expr2}
-		esb.exprStack = append(esb.exprStack, i)
+		esb.exprStack = append(esb.exprStack, &IndexExpr{X: expr2, Op: token, Index: expr1})
 
 	case ",":
-		expr1 := esb.exprStack[len(esb.exprStack)-1]
-		expr2 := esb.exprStack[len(esb.exprStack)-2]
 		if list, ok := expr2.(*ListExpr); ok {
 			list.List = append(list.List, expr1)
 			esb.exprStack = esb.exprStack[:len(esb.exprStack)-1]
@@ -556,19 +584,25 @@ func (esb *exprSandbox) mergeExprStack(token *Token) error {
 		}
 
 	case ")":
-		expr1 := esb.exprStack[len(esb.exprStack)-1]
-		expr2 := esb.exprStack[len(esb.exprStack)-2]
 		if list, ok := expr2.(*ListExpr); ok {
+			if len(esb.exprStack) < 3 {
+				return errors.Errorf("Unexpected arg list %s", list.Literal())
+			}
 			list.List = append(list.List, expr1)
 			expr3 := esb.exprStack[len(esb.exprStack)-3]
-			fn, _ := expr3.(*CallExpr)
-			fn.Args = list
+			if fn, ok := expr3.(*CallExpr); !ok {
+				return errors.Errorf("Unexpected tokens %s", expr3.Literal())
+			} else {
+				fn.Args = list
+			}
 			esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
 		} else if fn, ok := expr2.(*CallExpr); ok {
 			list := &ListExpr{}
 			list.List = append(list.List, expr1)
 			fn.Args = list
 			esb.exprStack = esb.exprStack[:len(esb.exprStack)-1]
+		} else {
+			return errors.Errorf("Unexpected tokens %s", expr2.Literal())
 		}
 
 	default:

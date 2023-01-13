@@ -208,53 +208,61 @@ func (d *IfDirect) Execute(p Params) (string, error) {
 }
 
 func (d *ForDirect) Execute(p Params) (string, error) {
-	if v, err := d.X.Execute(p); err != nil {
+	var (
+		str string
+		err error
+		v   reflect.Value
+	)
+	v, err = d.X.Execute(p)
+	if err != nil {
 		return "", nil
-	} else {
-		sb := &strings.Builder{}
-		v = uncoverInterface(v)
-		switch v.Kind() {
-		case reflect.Map:
-			iter := v.MapRange()
-			for iter.Next() {
-				np := p.copy()
-				if d.Key != nil {
-					np[d.Key.Name.value] = iter.Key()
-				}
-				np[d.Key.Name.value] = iter.Value()
-				if str, err := d.Body.Execute(np); err != nil {
-					return "", err
-				} else {
-					sb.WriteString(str)
-				}
+	}
+	sb := &strings.Builder{}
+	v = uncoverInterface(v)
+	np := cop(p)
+	switch v.Kind() {
+	case reflect.Map:
+		iter := v.MapRange()
+		for iter.Next() {
+			if d.Key != nil {
+				np[d.Key.Name.value] = iter.Key()
 			}
-
-		case reflect.Slice, reflect.Array:
-			for i := 0; i < v.Len(); i++ {
-				np := p.copy()
-				if d.Key != nil {
-					np[d.Key.Name.value] = i
-				}
-				np[d.Key.Name.value] = v.Index(i)
-				if str, err := d.Body.Execute(np); err != nil {
-					return "", err
-				} else {
-					sb.WriteString(str)
-				}
+			np[d.Key.Name.value] = iter.Value()
+			if str, err = d.Body.Execute(np); err != nil {
+				return "", err
+			} else {
+				sb.WriteString(str)
 			}
-
-		default:
-			return "", errors.Errorf("can't iter type %s", v.Type())
 		}
 
-		return sb.String(), nil
+	case reflect.Slice, reflect.Array, reflect.String:
+		for i := 0; i < v.Len(); i++ {
+			if d.Key != nil {
+				np[d.Key.Name.value] = i
+			}
+			np[d.Key.Name.value] = v.Index(i)
+			if str, err = d.Body.Execute(np); err != nil {
+				return "", err
+			} else {
+				sb.WriteString(str)
+			}
+		}
+
+	default:
+		return "", errors.Errorf("can't iter type %s", v.Type())
 	}
+
+	return sb.String(), nil
 }
 
 func (d *BlockDirect) Execute(p Params) (string, error) {
 	sb := &strings.Builder{}
+	var (
+		str string
+		err error
+	)
 	for _, v := range d.Body.List {
-		if str, err := v.Execute(p); err != nil {
+		if str, err = v.Execute(p); err != nil {
 			return "", err
 		} else {
 			sb.WriteString(str)
@@ -262,7 +270,7 @@ func (d *BlockDirect) Execute(p Params) (string, error) {
 	}
 
 	if b := p.getBlock(d.Name.Value.value); b != nil && b != d {
-		np := p.copy()
+		np := cop(p)
 		np.setBlockRemains(sb.String())
 
 		return b.Execute(np)
@@ -273,29 +281,22 @@ func (d *BlockDirect) Execute(p Params) (string, error) {
 
 func (d *IncludeDirect) Execute(p Params) (string, error) {
 	if d.Params != nil {
-		if d.Only {
-			p = Params{}
-			// for k, v := range d.Params {
-			// 	if vs, ok := v.(string); ok && strings.HasPrefix(vs, "$") {
-			// 		vs = strings.TrimPrefix(vs, "$")
-			// 		esb := GetExprSandbox()
-			// 		source := NewSource(vs)
-			// 		if stream, err := Tokenize(source); err != nil {
-
-			// 		}
-			// 	}
-			// 	if strings.HasPrefix(v.(string), "$") {
-
-			// 	}
-			// }
+		val, err := d.Params.Execute(p)
+		if err != nil {
+			return "", err
 		}
-		// if pv, err := d.Params.Execute(p); err != nil {
-		// 	return "", err
-		// } else if pv.CanConvert(reflect.TypeOf(make(Params))) {
-		// 	np := pv.Convert(reflect.TypeOf(make(Params)))
+		if val.Type() != reflect.TypeOf(p) {
+			return "", errors.Errorf("con't use type %s as params", val.Type())
+		}
+		if d.Only {
+			return d.Doc.Body.Execute(val.Interface().(Params))
+		}
+		np := cop(p)
+		for k, v := range val.Interface().(Params) {
+			np[k] = v
+		}
 
-		// 	return d.Doc.Body.Execute(np.Interface().(Params))
-		// }
+		return d.Doc.Body.Execute(np)
 	}
 
 	return d.Doc.Body.Execute(p)

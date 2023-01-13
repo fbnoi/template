@@ -91,9 +91,9 @@ func (d *AssignDirect) Validate() error {
 	return reportValidateError(d.Lh.Validate, d.Rh.Validate)
 }
 
-func (d *SectionDirect) Validate() error {
+func (d *SectionDirect) Validate() (err error) {
 	for _, v := range d.List {
-		if err := v.Validate(); err != nil {
+		if err = v.Validate(); err != nil {
 			return err
 		}
 	}
@@ -205,9 +205,9 @@ func (d *ExtendDirect) Validate() error {
 	return d.Doc.Body.Validate()
 }
 
-func reportValidateError(fns ...func() error) error {
+func reportValidateError(fns ...func() error) (err error) {
 	for _, fn := range fns {
-		if err := fn(); err != nil {
+		if err = fn(); err != nil {
 			return err
 		}
 	}

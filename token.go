@@ -88,13 +88,13 @@ func TypeToEnglish(typ int) string {
 		return "begin of statement command"
 
 	case TYPE_VAR_START:
-		return "begin of print statement"
+		return "begin of value command"
 
 	case TYPE_COMMAND_END:
 		return "end of statement command"
 
 	case TYPE_VAR_END:
-		return "end of print statement"
+		return "end of value command"
 
 	case TYPE_NAME:
 		return "name"
