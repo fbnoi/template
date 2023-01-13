@@ -6,20 +6,20 @@ import (
 	"io/ioutil"
 )
 
-type Source struct {
-	Identity string
-	Code     string
+type sourceCode struct {
+	identity string
+	code     string
 }
 
-type Line struct {
-	Num       int
-	Code      string
-	Highlight bool
+type textLine struct {
+	num       int
+	code      string
+	highlight bool
 }
 
 //Overview returns nearby code
-func (s *Source) Overview(line int) (codes []*Line) {
-	pos := reg_enter.FindAllStringIndex(s.Code, -1)
+func (s *sourceCode) Overview(line int) (codes []*textLine) {
+	pos := reg_enter.FindAllStringIndex(s.code, -1)
 	len := len(pos)
 	if line < 0 {
 		return nil
@@ -39,23 +39,23 @@ func (s *Source) Overview(line int) (codes []*Line) {
 		startLine = 1
 	}
 	for i := startLine; i < endLine; i++ {
-		codes = append(codes, &Line{Num: i, Code: s.Code[pos[i-1][1]:pos[i][0]], Highlight: i == line})
+		codes = append(codes, &textLine{num: i, code: s.code[pos[i-1][1]:pos[i][0]], highlight: i == line})
 	}
 
 	return
 }
 
-func NewSource(code string) *Source {
-	return &Source{Code: code, Identity: abstract([]byte(code))}
+func NewSourceCode(code string) *sourceCode {
+	return &sourceCode{code: code, identity: abstract([]byte(code))}
 }
 
-func NewSourceFile(path string) (*Source, error) {
+func NewSourceCodeFile(path string) (*sourceCode, error) {
 	bs, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Source{Code: string(bs), Identity: path}, nil
+	return &sourceCode{code: string(bs), identity: path}, nil
 }
 
 func abstract(content []byte) string {

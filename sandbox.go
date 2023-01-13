@@ -43,10 +43,10 @@ var (
 
 func BuildTemplate(content string) (*Document, error) {
 	var (
-		source *Source
+		source *sourceCode
 		err    error
 	)
-	source = NewSource(content)
+	source = NewSourceCode(content)
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +58,8 @@ func BuildFileTemplate(path string) (doc *Document, err error) {
 	if doc = _cache.Doc(path); doc != nil {
 		return
 	}
-	var source *Source
-	source, err = NewSourceFile(path)
+	var source *sourceCode
+	source, err = NewSourceCodeFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func BuildFileTemplate(path string) (doc *Document, err error) {
 	return
 }
 
-func buildSource(source *Source) (*Document, error) {
+func buildSource(source *sourceCode) (*Document, error) {
 	var (
 		stream *TokenStream
 		err    error

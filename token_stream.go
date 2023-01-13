@@ -46,9 +46,9 @@ var (
 	reg_string = regexp.MustCompile(`^"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"|^'([^\'\\\\]*(?:\\\\.[^\'\\\\]*)*)'`)
 )
 
-func Tokenize(source *Source) (*TokenStream, error) {
+func Tokenize(source *sourceCode) (*TokenStream, error) {
 	var (
-		code            = reg_enter.ReplaceAllString(source.Code, "\n")
+		code            = reg_enter.ReplaceAllString(source.code, "\n")
 		stream          = &TokenStream{Source: source, current: -1}
 		poss            = reg_token_start.FindAllStringIndex(code, -1)
 		cursor          = 0
@@ -226,7 +226,7 @@ func (b *Bracket) String() string {
 }
 
 type TokenStream struct {
-	Source  *Source
+	Source  *sourceCode
 	tokens  []*token
 	current int
 }
