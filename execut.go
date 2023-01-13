@@ -14,10 +14,10 @@ func (e *Ident) Execute(p Params) (reflect.Value, error) {
 
 func (e *BasicLit) Execute(Params) (reflect.Value, error) {
 	vs := e.Value.value
-	if e.Kind == TYPE_STRING {
+	if e.Kind == type_string {
 		return reflect.ValueOf(vs), nil
 	}
-	if e.Kind == TYPE_NUMBER {
+	if e.Kind == type_number {
 		if i, err := strconv.Atoi(vs); err == nil {
 			return reflect.ValueOf(i), nil
 		}

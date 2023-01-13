@@ -7,25 +7,25 @@ import (
 )
 
 var (
-	TAG_COMMENT         = [...]string{`{#`, `#}`}
-	TAG_BLOCK           = [...]string{`{%`, `%}`}
-	TAG_VARIABLE        = [...]string{`{{`, `}}`}
-	TAG_ESCAPE_COMMENT  = [...]string{`@{#`, `#}`}
-	TAG_ESCAPE_BLOCK    = [...]string{`@{%`, `%}`}
-	TAG_ESCAPE_VARIABLE = [...]string{`@{{`, `}}`}
+	tag_comment         = [...]string{`{#`, `#}`}
+	tag_block           = [...]string{`{%`, `%}`}
+	tag_variable        = [...]string{`{{`, `}}`}
+	tag_escape_comment  = [...]string{`@{#`, `#}`}
+	tag_escape_block    = [...]string{`@{%`, `%}`}
+	tag_escape_variable = [...]string{`@{{`, `}}`}
 
 	word_operators = [...]string{"and", "or", "in"}
 )
 
 var (
 	// }}
-	reg_variable = regexp.MustCompile(fmt.Sprintf(`\s*%s`, TAG_VARIABLE[1]))
+	reg_variable = regexp.MustCompile(fmt.Sprintf(`\s*%s`, tag_variable[1]))
 	// %}
-	reg_block = regexp.MustCompile(fmt.Sprintf(`\s*%s`, TAG_BLOCK[1]))
+	reg_block = regexp.MustCompile(fmt.Sprintf(`\s*%s`, tag_block[1]))
 	// #}
-	reg_comment = regexp.MustCompile(fmt.Sprintf(`\s*%s`, TAG_COMMENT[1]))
+	reg_comment = regexp.MustCompile(fmt.Sprintf(`\s*%s`, tag_comment[1]))
 	// {{ or {% or {#
-	reg_token_start = regexp.MustCompile(fmt.Sprintf(`(@?%s|@?%s|@?%s)`, TAG_VARIABLE[0], TAG_BLOCK[0], TAG_COMMENT[0]))
+	reg_token_start = regexp.MustCompile(fmt.Sprintf(`(@?%s|@?%s|@?%s)`, tag_variable[0], tag_block[0], tag_comment[0]))
 	// \r\n \n
 	reg_enter = regexp.MustCompile(`(\r\n|\n)`)
 	// whitespace
@@ -68,7 +68,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 	}
 
 	if len(poss) == 0 {
-		stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:], line))
+		stream.tokens = append(stream.tokens, newToken(type_text, code[cursor:], line))
 		cursor = len(code)
 	}
 	for posIndex < len(poss) {
@@ -77,46 +77,46 @@ func Tokenize(source *Source) (*TokenStream, error) {
 			posIndex++
 			continue
 		} else if pos[0] > cursor {
-			stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:pos[0]], line))
+			stream.tokens = append(stream.tokens, newToken(type_text, code[cursor:pos[0]], line))
 			moveCursor(pos[0])
 		}
 		var reg *regexp.Regexp
 		switch code[pos[0]:pos[1]] {
-		case TAG_ESCAPE_COMMENT[0]:
+		case tag_escape_comment[0]:
 			moveCursor(pos[0] + 1)
 			ends = reg_comment.FindStringIndex(code[cursor:])
 			if ends == nil {
-				return nil, &UnClosedToken{Line: line, token: TAG_ESCAPE_COMMENT[0]}
+				return nil, &UnClosedToken{Line: line, token: tag_escape_comment[0]}
 			}
-			stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:cursor+ends[1]], line))
+			stream.tokens = append(stream.tokens, newToken(type_text, code[cursor:cursor+ends[1]], line))
 			moveCursor(cursor + ends[1])
-		case TAG_ESCAPE_BLOCK[0]:
+		case tag_escape_block[0]:
 			moveCursor(pos[0] + 1)
 			ends = reg_block.FindStringIndex(code[cursor:])
 			if ends == nil {
-				return nil, &UnClosedToken{Line: line, token: TAG_ESCAPE_BLOCK[0]}
+				return nil, &UnClosedToken{Line: line, token: tag_escape_block[0]}
 			}
-			stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:cursor+ends[1]], line))
+			stream.tokens = append(stream.tokens, newToken(type_text, code[cursor:cursor+ends[1]], line))
 			moveCursor(cursor + ends[1])
-		case TAG_ESCAPE_VARIABLE[0]:
+		case tag_escape_variable[0]:
 			moveCursor(pos[0] + 1)
 			ends = reg_variable.FindStringIndex(code[cursor:])
 			if ends == nil {
-				return nil, &UnClosedToken{Line: line, token: TAG_ESCAPE_VARIABLE[0]}
+				return nil, &UnClosedToken{Line: line, token: tag_escape_variable[0]}
 			}
-			stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:cursor+ends[1]], line))
+			stream.tokens = append(stream.tokens, newToken(type_text, code[cursor:cursor+ends[1]], line))
 			moveCursor(cursor + ends[1])
-		case TAG_COMMENT[0]:
+		case tag_comment[0]:
 			ends = reg_comment.FindStringIndex(code[cursor:])
 			if ends == nil {
-				return nil, &UnClosedToken{Line: line, token: TAG_COMMENT[0]}
+				return nil, &UnClosedToken{Line: line, token: tag_comment[0]}
 			}
-			stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:cursor+ends[1]], line))
+			stream.tokens = append(stream.tokens, newToken(type_text, code[cursor:cursor+ends[1]], line))
 			moveCursor(cursor + ends[1])
-		case TAG_BLOCK[0]:
+		case tag_block[0]:
 			reg = reg_block
 
-		case TAG_VARIABLE[0]:
+		case tag_variable[0]:
 			reg = reg_variable
 
 		default:
@@ -124,15 +124,15 @@ func Tokenize(source *Source) (*TokenStream, error) {
 		}
 
 		if reg == reg_block {
-			token = newToken(TYPE_COMMAND_START, code[cursor:cursor+2], line)
+			token = newToken(type_command_start, code[cursor:cursor+2], line)
 		} else {
-			token = newToken(TYPE_VAR_START, code[cursor:cursor+2], line)
+			token = newToken(type_var_start, code[cursor:cursor+2], line)
 		}
 		stream.tokens = append(stream.tokens, token)
 		moveCursor(cursor + 2)
 		ends = reg.FindStringIndex(code[cursor:])
 		if ends == nil {
-			return nil, &UnClosedToken{Line: line, token: TAG_BLOCK[0]}
+			return nil, &UnClosedToken{Line: line, token: tag_block[0]}
 		}
 		length = ends[1] - ends[0]
 		end = cursor + ends[0]
@@ -143,25 +143,25 @@ func Tokenize(source *Source) (*TokenStream, error) {
 				continue
 			}
 			if sPos = reg_operator.FindStringIndex(code[cursor:end]); sPos != nil {
-				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, code[cursor:cursor+sPos[1]], line))
+				stream.tokens = append(stream.tokens, newToken(type_operator, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos = reg_word.FindStringIndex(code[cursor:end]); sPos != nil {
 				word = code[cursor : cursor+sPos[1]]
 				moveCursor(cursor + sPos[1])
 				if isWordOperator(word) {
-					stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, word, line))
+					stream.tokens = append(stream.tokens, newToken(type_operator, word, line))
 					continue
 				}
-				stream.tokens = append(stream.tokens, newToken(TYPE_NAME, word, line))
+				stream.tokens = append(stream.tokens, newToken(type_name, word, line))
 			} else if sPos = reg_number.FindStringIndex(code[cursor:end]); sPos != nil {
-				stream.tokens = append(stream.tokens, newToken(TYPE_NUMBER, code[cursor:cursor+sPos[1]], line))
+				stream.tokens = append(stream.tokens, newToken(type_number, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos = reg_string.FindStringIndex(code[cursor:end]); sPos != nil {
 				str := strings.Trim(code[cursor:cursor+sPos[1]], "\"'")
-				stream.tokens = append(stream.tokens, newToken(TYPE_STRING, str, line))
+				stream.tokens = append(stream.tokens, newToken(type_string, str, line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos = reg_punctuation.FindStringIndex(code[cursor:end]); sPos != nil {
-				stream.tokens = append(stream.tokens, newToken(TYPE_PUNCTUATION, code[cursor:cursor+sPos[1]], line))
+				stream.tokens = append(stream.tokens, newToken(type_punctuation, code[cursor:cursor+sPos[1]], line))
 				moveCursor(cursor + sPos[1])
 			} else if sPos = reg_bracket.FindStringIndex(code[cursor:end]); sPos != nil {
 				bracket = code[cursor+sPos[0] : cursor+sPos[1]]
@@ -181,7 +181,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 					}
 					brackets = brackets[:len(brackets)-1]
 				}
-				stream.tokens = append(stream.tokens, newToken(TYPE_OPERATOR, bracket, line))
+				stream.tokens = append(stream.tokens, newToken(type_operator, bracket, line))
 				moveCursor(cursor + sPos[1])
 			} else {
 				return nil, &UnexpectedToken{Line: line, token: code[cursor:end]}
@@ -192,9 +192,9 @@ func Tokenize(source *Source) (*TokenStream, error) {
 		}
 		moveCursor(end)
 		if reg == reg_block {
-			token = newToken(TYPE_COMMAND_END, code[cursor:cursor+length], line)
+			token = newToken(type_command_end, code[cursor:cursor+length], line)
 		} else {
-			token = newToken(TYPE_VAR_END, code[cursor:cursor+length], line)
+			token = newToken(type_var_end, code[cursor:cursor+length], line)
 		}
 		stream.tokens = append(stream.tokens, token)
 		moveCursor(cursor + length)
@@ -203,11 +203,11 @@ func Tokenize(source *Source) (*TokenStream, error) {
 	}
 
 	if cursor < codeLen {
-		stream.tokens = append(stream.tokens, newToken(TYPE_TEXT, code[cursor:codeLen], line))
+		stream.tokens = append(stream.tokens, newToken(type_text, code[cursor:codeLen], line))
 		moveCursor(codeLen)
 	}
 
-	stream.tokens = append(stream.tokens, newToken(TYPE_EOF, "", line))
+	stream.tokens = append(stream.tokens, newToken(type_eof, "", line))
 
 	return stream, nil
 }

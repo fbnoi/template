@@ -157,16 +157,16 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 		}
 
 		switch tok.typ {
-		case TYPE_EOF:
+		case type_eof:
 			return nil
 
-		case TYPE_TEXT:
-			node = &TextDirect{Text: &BasicLit{Kind: TYPE_STRING, Value: tok}}
+		case type_text:
+			node = &TextDirect{Text: &BasicLit{Kind: type_string, Value: tok}}
 			sb.cursor.Append(node)
 
-		case TYPE_VAR_START:
+		case type_var_start:
 			if subStream, err = subStreamIf(stream, func(t *token) bool {
-				return t.typ != TYPE_VAR_END
+				return t.typ != type_var_end
 			}); err != nil {
 				return err
 			} else {
@@ -179,7 +179,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				sb.cursor.Append(node)
 			}
 
-		case TYPE_COMMAND_START:
+		case type_command_start:
 			tok, err = stream.Next()
 			if err != nil {
 				return err
@@ -205,7 +205,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 
 			case "extend":
 				node = &ExtendDirect{}
-				if tok, err = nextTokenTypeShouldBe(stream, TYPE_STRING); err != nil {
+				if tok, err = nextTokenTypeShouldBe(stream, type_string); err != nil {
 					return err
 				}
 				node.(*ExtendDirect).Path = &BasicLit{Kind: tok.typ, Value: tok}
@@ -219,7 +219,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 
 			case "include":
 				node = &IncludeDirect{}
-				if tok, err = nextTokenTypeShouldBe(stream, TYPE_STRING); err != nil {
+				if tok, err = nextTokenTypeShouldBe(stream, type_string); err != nil {
 					return err
 				}
 				node.(*IncludeDirect).Path = &BasicLit{Kind: tok.typ, Value: tok}
@@ -233,7 +233,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 				if tok.value == "with" {
 					if subStream, err = subStreamIf(stream, func(t *token) bool {
-						return t.typ != TYPE_COMMAND_END && t.value != "only"
+						return t.typ != type_command_end && t.value != "only"
 					}); err != nil {
 						return err
 					}
@@ -253,10 +253,10 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				sb.cursor.Append(node)
 
 			case "block":
-				if tok, err = nextTokenTypeShouldBe(stream, TYPE_NAME); err != nil {
+				if tok, err = nextTokenTypeShouldBe(stream, type_name); err != nil {
 					return err
 				}
-				node = &BlockDirect{Name: &BasicLit{Kind: TYPE_STRING, Value: tok}}
+				node = &BlockDirect{Name: &BasicLit{Kind: type_string, Value: tok}}
 				if _, ok := doc.blocks[tok.value]; ok {
 					return errors.Errorf("block %s has already exist", tok.value)
 				}
@@ -266,7 +266,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 
 			case "set":
 				node = &AssignDirect{}
-				if tok, err = nextTokenTypeShouldBe(stream, TYPE_NAME); err != nil {
+				if tok, err = nextTokenTypeShouldBe(stream, type_name); err != nil {
 					return err
 				}
 				node.(*AssignDirect).Lh = &Ident{Name: tok}
@@ -274,7 +274,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					return err
 				}
 				if subStream, err = subStreamIf(stream, func(t *token) bool {
-					return t.typ != TYPE_COMMAND_END
+					return t.typ != type_command_end
 				}); err != nil {
 					return err
 				}
@@ -292,7 +292,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 					return newUnexpectedToken(tok)
 				}
 				if subStream, err = subStreamIf(stream, func(t *token) bool {
-					return t.typ != TYPE_COMMAND_END
+					return t.typ != type_command_end
 				}); err != nil {
 					return err
 				}
@@ -315,7 +315,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 
 			case "if":
 				if subStream, err = subStreamIf(stream, func(t *token) bool {
-					return t.typ != TYPE_COMMAND_END
+					return t.typ != type_command_end
 				}); err != nil {
 					return err
 				}
@@ -338,17 +338,17 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				node = &ForDirect{}
 				switch subStream.Size() {
 				case 2:
-					if tok, err = nextTokenTypeShouldBe(subStream, TYPE_NAME); err != nil {
+					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
 					node.(*ForDirect).Value = &Ident{Name: tok}
 				case 4:
-					if tok, err = nextTokenTypeShouldBe(subStream, TYPE_NAME); err != nil {
+					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
 					node.(*ForDirect).Key = &Ident{Name: tok}
 					subStream.Skip(1)
-					if tok, err = nextTokenTypeShouldBe(subStream, TYPE_NAME); err != nil {
+					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
 					node.(*ForDirect).Value = &Ident{Name: tok}
@@ -357,7 +357,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 				}
 
 				if subStream, err = subStreamIf(stream, func(t *token) bool {
-					return t.typ != TYPE_COMMAND_END
+					return t.typ != type_command_end
 				}); err != nil {
 					return err
 				}
@@ -375,7 +375,7 @@ func (sb *sandbox) build(doc *Document, stream *TokenStream) error {
 
 			}
 
-		case TYPE_COMMAND_END, TYPE_VAR_END:
+		case type_command_end, type_var_end:
 			continue
 
 		default:
@@ -430,11 +430,11 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 			return err
 		}
 		switch tok.typ {
-		case TYPE_NUMBER, TYPE_STRING:
+		case type_number, type_string:
 			b := &BasicLit{Kind: tok.typ, Value: tok}
 			esb.exprStack = append(esb.exprStack, b)
 
-		case TYPE_NAME:
+		case type_name:
 			if strings.Contains(internalKeyWords, fmt.Sprintf("_%s_", tok.value)) {
 				return newUnexpectedToken(tok)
 			}
@@ -446,7 +446,7 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 			}
 			esb.exprStack = append(esb.exprStack, &Ident{Name: tok})
 
-		case TYPE_OPERATOR:
+		case type_operator:
 			switch tok.value {
 			case ")":
 				for {
@@ -510,7 +510,7 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 
 			}
 
-		case TYPE_PUNCTUATION:
+		case type_punctuation:
 			switch tok.value {
 			case ",":
 				topOp = esb.opStack[len(esb.opStack)-1]
@@ -528,7 +528,7 @@ func (esb *exprSandbox) build(stream *TokenStream) error {
 				return newUnexpectedToken(tok)
 
 			}
-		case TYPE_EOF:
+		case type_eof:
 		default:
 			return newUnexpectedToken(tok)
 		}
@@ -639,7 +639,7 @@ func subStreamIf(ts *TokenStream, fn func(tok *token) bool) (*TokenStream, error
 	le := ts.current - start
 	var tokens = make([]*token, le+1)
 	copy(tokens, ts.tokens[start:ts.current])
-	tokens[le] = newToken(TYPE_EOF, "", ts.tokens[ts.current-1].line)
+	tokens[le] = newToken(type_eof, "", ts.tokens[ts.current-1].line)
 
 	return &TokenStream{Source: ts.Source, tokens: tokens, current: -1}, nil
 }

@@ -1,17 +1,17 @@
 package template
 
 const (
-	TYPE_EOF = iota - 1
-	TYPE_TEXT
-	TYPE_COMMAND_START
-	TYPE_VAR_START
-	TYPE_COMMAND_END
-	TYPE_VAR_END
-	TYPE_NAME
-	TYPE_NUMBER
-	TYPE_STRING
-	TYPE_OPERATOR
-	TYPE_PUNCTUATION
+	type_eof = iota - 1
+	type_text
+	type_command_start
+	type_var_start
+	type_command_end
+	type_var_end
+	type_name
+	type_number
+	type_string
+	type_operator
+	type_punctuation
 )
 
 type token struct {
@@ -21,7 +21,7 @@ type token struct {
 }
 
 func (t *token) string() string {
-	if t.typ == TYPE_STRING {
+	if t.typ == type_string {
 		return "\"" + t.value + "\""
 	}
 

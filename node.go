@@ -52,7 +52,7 @@ type (
 	}
 
 	BasicLit struct {
-		Kind  int    // TYPE_NUMBER or TYPE_STRING
+		Kind  int    // type_number or type_string
 		Value *token // literal string; e.g. 42, 0x7f, 3.14, 1e-9, 2.4i, 'a', etc.; not nil
 	}
 
