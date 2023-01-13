@@ -1,7 +1,5 @@
 package template
 
-import "fmt"
-
 const (
 	TYPE_EOF = iota - 1
 	TYPE_TEXT
@@ -22,85 +20,10 @@ type token struct {
 	line  int
 }
 
-func (t *token) info() string {
-	return fmt.Sprintf("%s(%s)(%d)", typeToString(t.typ), t.value, t.line)
-}
-
 func (t *token) string() string {
 	if t.typ == TYPE_STRING {
 		return "\"" + t.value + "\""
 	}
 
 	return t.value
-}
-
-func typeToString(typ int) (name string) {
-	switch typ {
-	case TYPE_EOF:
-		name = "TYPE_EOF"
-	case TYPE_TEXT:
-		name = "TYPE_TEXT"
-	case TYPE_COMMAND_START:
-		name = "TYPE_COMMAND_START"
-	case TYPE_VAR_START:
-		name = "TYPE_VAR_START"
-	case TYPE_COMMAND_END:
-		name = "TYPE_COMMAND_END"
-	case TYPE_VAR_END:
-		name = "TYPE_VAR_END"
-	case TYPE_NAME:
-		name = "TYPE_NAME"
-	case TYPE_NUMBER:
-		name = "TYPE_NUMBER"
-	case TYPE_STRING:
-		name = "TYPE_STRING"
-	case TYPE_OPERATOR:
-		name = "TYPE_OPERATOR"
-	case TYPE_PUNCTUATION:
-		name = "TYPE_PUNCTUATION"
-	default:
-		panic(fmt.Sprintf("Token of type '%d' does not exist.", typ))
-	}
-	return
-}
-
-func typeToEnglish(typ int) string {
-	switch typ {
-	case TYPE_EOF:
-		return "end of template"
-
-	case TYPE_TEXT:
-		return "text"
-
-	case TYPE_COMMAND_START:
-		return "begin of statement command"
-
-	case TYPE_VAR_START:
-		return "begin of value command"
-
-	case TYPE_COMMAND_END:
-		return "end of statement command"
-
-	case TYPE_VAR_END:
-		return "end of value command"
-
-	case TYPE_NAME:
-		return "name"
-
-	case TYPE_NUMBER:
-		return "number"
-
-	case TYPE_STRING:
-		return "string"
-
-	case TYPE_OPERATOR:
-		return "operator"
-
-	case TYPE_PUNCTUATION:
-		return "punctuation"
-
-	default:
-		panic(fmt.Sprintf("Token of type '%d' does not exist.", typ))
-
-	}
 }
