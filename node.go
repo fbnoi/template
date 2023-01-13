@@ -48,12 +48,12 @@ type DirectParam struct {
 
 type (
 	Ident struct {
-		Name *Token // identifier name; not nil
+		Name *token // identifier name; not nil
 	}
 
 	BasicLit struct {
 		Kind  int    // TYPE_NUMBER or TYPE_STRING
-		Value *Token // literal string; e.g. 42, 0x7f, 3.14, 1e-9, 2.4i, 'a', etc.; not nil
+		Value *token // literal string; e.g. 42, 0x7f, 3.14, 1e-9, 2.4i, 'a', etc.; not nil
 	}
 
 	ListExpr struct {
@@ -64,7 +64,7 @@ type (
 	IndexExpr struct {
 		X     Expr   // expression; not nil
 		Index Expr   // index expression; not nil
-		Op    *Token // not nil
+		Op    *token // not nil
 	}
 
 	// A CallExpr node represents an expression followed by an argument list.
@@ -76,14 +76,14 @@ type (
 	// A BinaryExpr node represents a binary expression.
 	BinaryExpr struct {
 		X  Expr   // left operand; not nil
-		Op *Token // operator; not nil
+		Op *token // operator; not nil
 		Y  Expr   // right operand; not nil
 	}
 
 	// A Single node represents a single expression.
 	SingleExpr struct {
 		X  Expr   // expr; not nil
-		Op *Token // operator; not nil
+		Op *token // operator; not nil
 	}
 )
 

@@ -16,17 +16,17 @@ const (
 	TYPE_PUNCTUATION
 )
 
-type Token struct {
+type token struct {
 	value string
 	typ   int
 	line  int
 }
 
-func (t *Token) Info() string {
-	return fmt.Sprintf("%s(%s)(%d)", TypeToString(t.typ), t.value, t.line)
+func (t *token) info() string {
+	return fmt.Sprintf("%s(%s)(%d)", typeToString(t.typ), t.value, t.line)
 }
 
-func (t *Token) String() string {
+func (t *token) string() string {
 	if t.typ == TYPE_STRING {
 		return "\"" + t.value + "\""
 	}
@@ -34,19 +34,7 @@ func (t *Token) String() string {
 	return t.value
 }
 
-func (t *Token) Value() string {
-	return t.value
-}
-
-func (t *Token) Type() int {
-	return t.typ
-}
-
-func (t *Token) Line() int {
-	return t.line
-}
-
-func TypeToString(typ int) (name string) {
+func typeToString(typ int) (name string) {
 	switch typ {
 	case TYPE_EOF:
 		name = "TYPE_EOF"
@@ -76,7 +64,7 @@ func TypeToString(typ int) (name string) {
 	return
 }
 
-func TypeToEnglish(typ int) string {
+func typeToEnglish(typ int) string {
 	switch typ {
 	case TYPE_EOF:
 		return "end of template"

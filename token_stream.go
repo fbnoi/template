@@ -59,6 +59,7 @@ func Tokenize(source *Source) (*TokenStream, error) {
 		bracket, word   string
 		brackets        []*Bracket
 		end, length     int
+		token           *token
 	)
 
 	moveCursor := func(n int) {
@@ -117,8 +118,11 @@ func Tokenize(source *Source) (*TokenStream, error) {
 
 		case TAG_VARIABLE[0]:
 			reg = reg_variable
+
+		default:
+			return nil, &UnexpectedToken{Line: line, token: code[pos[0]:pos[1]]}
 		}
-		var token *Token
+
 		if reg == reg_block {
 			token = newToken(TYPE_COMMAND_START, code[cursor:cursor+2], line)
 		} else {
@@ -208,8 +212,8 @@ func Tokenize(source *Source) (*TokenStream, error) {
 	return stream, nil
 }
 
-func newToken(typ int, value string, line int) *Token {
-	return &Token{typ: typ, value: value, line: line}
+func newToken(typ int, value string, line int) *token {
+	return &token{typ: typ, value: value, line: line}
 }
 
 type Bracket struct {
@@ -223,7 +227,7 @@ func (b *Bracket) String() string {
 
 type TokenStream struct {
 	Source  *Source
-	tokens  []*Token
+	tokens  []*token
 	current int
 }
 
@@ -234,13 +238,13 @@ func (ts *TokenStream) Size() int {
 func (ts *TokenStream) String() string {
 	sb := &strings.Builder{}
 	for _, t := range ts.tokens {
-		sb.WriteString(t.String())
+		sb.WriteString(t.string())
 	}
 
 	return sb.String()
 }
 
-func (ts *TokenStream) Current() (*Token, error) {
+func (ts *TokenStream) Current() (*token, error) {
 	if ts.current >= len(ts.tokens) {
 		return nil, &UnexpectedEndOfFile{}
 	}
@@ -254,7 +258,7 @@ func (ts *TokenStream) HasNext() bool {
 	return ts.current < size-1
 }
 
-func (ts *TokenStream) Next() (*Token, error) {
+func (ts *TokenStream) Next() (*token, error) {
 	ts.current++
 	if ts.current > len(ts.tokens)-1 {
 		return nil, &UnexpectedEndOfFile{}
@@ -263,7 +267,7 @@ func (ts *TokenStream) Next() (*Token, error) {
 	return ts.tokens[ts.current], nil
 }
 
-func (ts *TokenStream) Skip(n int) (*Token, error) {
+func (ts *TokenStream) Skip(n int) (*token, error) {
 	ts.current += n
 	if ts.current >= len(ts.tokens) {
 		return nil, &UnexpectedEndOfFile{}
@@ -272,16 +276,12 @@ func (ts *TokenStream) Skip(n int) (*Token, error) {
 	return ts.tokens[ts.current], nil
 }
 
-func (ts *TokenStream) Peek(n int) (*Token, error) {
+func (ts *TokenStream) Peek(n int) (*token, error) {
 	if ts.current+n >= len(ts.tokens)-1 {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
 	return ts.tokens[ts.current+n], nil
-}
-
-func (ts *TokenStream) IsEOF() bool {
-	return ts.current != -1 && TYPE_EOF == ts.tokens[ts.current].Type()
 }
 
 func isWordOperator(word string) bool {

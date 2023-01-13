@@ -2,8 +2,8 @@ package template
 
 import "fmt"
 
-func newUnexpectedToken(token *Token) error {
-	return &UnexpectedToken{Line: token.Line(), token: token.Value()}
+func newUnexpectedToken(tok *token) error {
+	return &UnexpectedToken{Line: tok.line, token: tok.value}
 }
 
 type UnexpectedEndOfFile struct {

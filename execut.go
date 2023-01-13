@@ -9,11 +9,11 @@ import (
 )
 
 func (e *Ident) Execute(p Params) (reflect.Value, error) {
-	return Get(p, e.Name.Value())
+	return Get(p, e.Name.value)
 }
 
 func (e *BasicLit) Execute(Params) (reflect.Value, error) {
-	vs := e.Value.Value()
+	vs := e.Value.value
 	if e.Kind == TYPE_STRING {
 		return reflect.ValueOf(vs), nil
 	}
@@ -39,14 +39,14 @@ func (e *IndexExpr) Execute(p Params) (reflect.Value, error) {
 		return zeroValue, err
 	}
 	vx := x.Interface()
-	op := e.Op.Value()
+	op := e.Op.value
 	switch op {
 	case ".":
 		switch index := e.Index.(type) {
 		case *Ident:
-			return Get(vx, index.Name.Value())
+			return Get(vx, index.Name.value)
 		case *CallExpr:
-			if fn, err := method(x, index.Func.Name.Value()); err != nil {
+			if fn, err := method(x, index.Func.Name.value); err != nil {
 				return zeroValue, err
 			} else {
 				argv := []reflect.Value{}
@@ -88,7 +88,7 @@ func (e *IndexExpr) Execute(p Params) (reflect.Value, error) {
 }
 
 func (e *CallExpr) Execute(p Params) (reflect.Value, error) {
-	if fn, err := method(reflect.ValueOf(p), e.Func.Name.Value()); err != nil {
+	if fn, err := method(reflect.ValueOf(p), e.Func.Name.value); err != nil {
 		return zeroValue, err
 	} else {
 		argv := []reflect.Value{}
@@ -105,7 +105,7 @@ func (e *CallExpr) Execute(p Params) (reflect.Value, error) {
 }
 
 func (e *BinaryExpr) Execute(p Params) (reflect.Value, error) {
-	op := e.Op.Value()
+	op := e.Op.value
 	x, err := e.X.Execute(p)
 	if err != nil {
 		return zeroValue, err
@@ -145,7 +145,7 @@ func (e *SingleExpr) Execute(p Params) (reflect.Value, error) {
 	if err != nil {
 		return zeroValue, err
 	}
-	switch e.Op.Value() {
+	switch e.Op.value {
 	case "not":
 		r := x.IsZero()
 

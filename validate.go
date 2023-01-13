@@ -25,7 +25,7 @@ var (
 // ----------------------------------------------------------------------------
 // ExprNode validation
 func (e *Ident) Validate() error {
-	if !goodName(e.Name.Value()) {
+	if !goodName(e.Name.value) {
 		return newUnexpectedToken(e.Name)
 	}
 
@@ -47,7 +47,7 @@ func (e *ListExpr) Validate() error {
 }
 
 func (e *IndexExpr) Validate() error {
-	switch e.Op.Value() {
+	switch e.Op.value {
 	case ".":
 		if !isType(e.Index, identType, callExprType) {
 			return exprValidateError(e)
