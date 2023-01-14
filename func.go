@@ -14,7 +14,7 @@ var (
 	errorType = reflect.TypeOf((*error)(nil)).Elem()
 )
 
-func Get(p any, keys ...any) (value reflect.Value, err error) {
+func get(p any, keys ...any) (value reflect.Value, err error) {
 	value = reflect.ValueOf(p)
 	for _, key := range keys {
 		kv := reflect.ValueOf(key)

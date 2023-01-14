@@ -258,29 +258,29 @@ func TestGet(t *testing.T) {
 		val reflect.Value
 		err error
 	)
-	val, err = Get(bar, "Foo")
+	val, err = get(bar, "Foo")
 	assert.Nil(t, err)
 	assert.Equal(t, val.Interface(), foo)
 
-	val, err = Get(bar, "Foo", "Bar")
+	val, err = get(bar, "Foo", "Bar")
 	assert.Nil(t, err)
 	assert.Equal(t, val.Interface(), "bar")
 
-	val, err = Get(bar, "Bar", "1")
+	val, err = get(bar, "Bar", "1")
 	assert.Nil(t, err)
 	assert.Equal(t, val.Interface(), 1)
 
-	_, err = Get(bar, "Bar", "4")
+	_, err = get(bar, "Bar", "4")
 	assert.ErrorContains(t, err, "index 4 don't exist in map")
 
-	_, err = Get(bar, "Bars")
+	_, err = get(bar, "Bars")
 	assert.NotNil(t, err)
 
-	val, err = Get(bar, "ComplexField", "key1", 1)
+	val, err = get(bar, "ComplexField", "key1", 1)
 	assert.Nil(t, err)
 	assert.Equal(t, val.Interface(), foo2)
 
-	val, err = Get(bar, "Name")
+	val, err = get(bar, "Name")
 	assert.Nil(t, err)
 	assert.Equal(t, val.Interface(), "Bar")
 }

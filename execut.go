@@ -9,7 +9,7 @@ import (
 )
 
 func (e *ident) execute(p Params) (reflect.Value, error) {
-	return Get(p, e.name.value)
+	return get(p, e.name.value)
 }
 
 func (e *basicLit) execute(Params) (reflect.Value, error) {
@@ -44,7 +44,7 @@ func (e *indexExpr) execute(p Params) (reflect.Value, error) {
 	case ".":
 		switch index := e.index.(type) {
 		case *ident:
-			return Get(vx, index.name.value)
+			return get(vx, index.name.value)
 		case *callExpr:
 			if fn, err := method(x, index.fn.name.value); err != nil {
 				return zeroValue, err
@@ -72,10 +72,10 @@ func (e *indexExpr) execute(p Params) (reflect.Value, error) {
 			return zeroValue, err
 		}
 		if v.CanInt() {
-			return Get(vx, x)
+			return get(vx, x)
 		}
 		if v.Kind() == reflect.String {
-			return Get(vx, v.Interface().(string))
+			return get(vx, v.Interface().(string))
 		}
 		return zeroValue, errors.Errorf("con't convert %s(type of %s) to type string",
 			v,
