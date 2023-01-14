@@ -9,36 +9,36 @@ import (
 var (
 
 	// expr type
-	identType      = reflect.TypeOf(&Ident{}).Elem()
-	indexExprType  = reflect.TypeOf(&IndexExpr{}).Elem()
-	ListExprType   = reflect.TypeOf(&ListExpr{}).Elem()
-	callExprType   = reflect.TypeOf(&CallExpr{}).Elem()
-	binaryExprType = reflect.TypeOf(&BinaryExpr{}).Elem()
+	identType      = reflect.TypeOf(&ident{}).Elem()
+	indexExprType  = reflect.TypeOf(&indexExpr{}).Elem()
+	listExprType   = reflect.TypeOf(&listExpr{}).Elem()
+	callExprType   = reflect.TypeOf(&callExpr{}).Elem()
+	binaryExprType = reflect.TypeOf(&binaryExpr{}).Elem()
 
 	//direct type
-	sectionDirectType = reflect.TypeOf(&SectionDirect{}).Elem()
-	blockDirectType   = reflect.TypeOf(&BlockDirect{}).Elem()
-	ifDirectType      = reflect.TypeOf(&IfDirect{}).Elem()
-	extendDirectType  = reflect.TypeOf(&ExtendDirect{}).Elem()
+	sectionDirectType = reflect.TypeOf(&sectionDirect{}).Elem()
+	blockDirectType   = reflect.TypeOf(&blockDirect{}).Elem()
+	ifDirectType      = reflect.TypeOf(&ifDirect{}).Elem()
+	extendDirectType  = reflect.TypeOf(&extendDirect{}).Elem()
 )
 
 // ----------------------------------------------------------------------------
 // ExprNode validation
-func (e *Ident) Validate() error {
-	if !goodName(e.Name.value) {
-		return newUnexpectedToken(e.Name)
+func (e *ident) validate() error {
+	if !goodName(e.name.value) {
+		return newUnexpectedToken(e.name)
 	}
 
 	return nil
 }
 
-func (e *BasicLit) Validate() error {
+func (e *basicLit) validate() error {
 	return nil
 }
 
-func (e *ListExpr) Validate() error {
-	for _, v := range e.List {
-		if err := v.Validate(); err != nil {
+func (e *listExpr) validate() error {
+	for _, v := range e.list {
+		if err := v.validate(); err != nil {
 			return err
 		}
 	}
@@ -46,54 +46,54 @@ func (e *ListExpr) Validate() error {
 	return nil
 }
 
-func (e *IndexExpr) Validate() error {
-	switch e.Op.value {
+func (e *indexExpr) validate() error {
+	switch e.op.value {
 	case ".":
-		if !isType(e.Index, identType, callExprType) {
+		if !isType(e.index, identType, callExprType) {
 			return exprValidateError(e)
 		}
 	case "[":
-		if isType(e.Index, ListExprType) {
+		if isType(e.index, listExprType) {
 			return exprValidateError(e)
 		}
 	default:
-		return newUnexpectedToken(e.Op)
+		return newUnexpectedToken(e.op)
 	}
 
-	return reportValidateError(e.X.Validate, e.Index.Validate)
+	return reportValidateError(e.x.validate, e.index.validate)
 }
 
-func (e *CallExpr) Validate() error {
-	return reportValidateError(e.Func.Validate, e.Args.Validate)
+func (e *callExpr) validate() error {
+	return reportValidateError(e.fn.validate, e.args.validate)
 }
 
-func (e *BinaryExpr) Validate() error {
-	if isType(e.X, ListExprType) || isType(e.Y, ListExprType) {
+func (e *binaryExpr) validate() error {
+	if isType(e.x, listExprType) || isType(e.y, listExprType) {
 		return exprValidateError(e)
 	}
 
-	return reportValidateError(e.X.Validate, e.Y.Validate)
+	return reportValidateError(e.x.validate, e.y.validate)
 }
 
-func (e *SingleExpr) Validate() error {
+func (e *singleExpr) validate() error {
 
-	if !isType(e.X, identType, indexExprType) {
+	if !isType(e.x, identType, indexExprType) {
 		return exprValidateError(e)
 	}
 
-	return e.X.Validate()
+	return e.x.validate()
 }
 
 // ----------------------------------------------------------------------------
 // DirectNode
 
-func (d *AssignDirect) Validate() error {
-	return reportValidateError(d.Lh.Validate, d.Rh.Validate)
+func (d *assignDirect) validate() error {
+	return reportValidateError(d.lh.validate, d.rh.validate)
 }
 
-func (d *SectionDirect) Validate() (err error) {
-	for _, v := range d.List {
-		if err = v.Validate(); err != nil {
+func (d *sectionDirect) validate() (err error) {
+	for _, v := range d.list {
+		if err = v.validate(); err != nil {
 			return err
 		}
 	}
@@ -101,108 +101,104 @@ func (d *SectionDirect) Validate() (err error) {
 	return nil
 }
 
-func (d *TextDirect) Validate() error {
-	return d.Text.Validate()
+func (d *textDirect) validate() error {
+	return d.text.validate()
 }
 
-func (d *ValueDirect) Validate() error {
-	return d.Tok.Validate()
+func (d *valueDirect) validate() error {
+	return d.tok.validate()
 }
 
-func (d *SetDirect) Validate() error {
-	return d.Assign.Validate()
-}
-
-func (d *IfDirect) Validate() error {
-	if !isType(d.Cond, identType, indexExprType, callExprType, binaryExprType) {
-		return exprValidateError(d.Cond)
+func (d *ifDirect) validate() error {
+	if !isType(d.cond, identType, indexExprType, callExprType, binaryExprType) {
+		return exprValidateError(d.cond)
 	}
 
-	for _, v := range d.Body.List {
+	for _, v := range d.body.list {
 		if isType(v, blockDirectType, extendDirectType, sectionDirectType) {
-			return errors.Errorf("expected %s", d.Else.Type())
+			return errors.Errorf("expected %s", d.el.typ())
 		}
 	}
 
-	if err := reportValidateError(d.Cond.Validate, d.Body.Validate); err != nil {
+	if err := reportValidateError(d.cond.validate, d.body.validate); err != nil {
 		return err
 	}
 
-	if d.Else != nil {
-		if !isType(d.Else, ifDirectType, sectionDirectType) {
-			return errors.Errorf("expected %s", d.Else.Type())
+	if d.el != nil {
+		if !isType(d.el, ifDirectType, sectionDirectType) {
+			return errors.Errorf("expected %s", d.el.typ())
 		}
 
-		return d.Else.Validate()
+		return d.el.validate()
 	}
 
 	return nil
 }
 
-func (d *ForDirect) Validate() error {
-	if d.Key != nil {
-		if err := d.Key.Validate(); err != nil {
-			return exprValidateError(d.Key)
+func (d *forDirect) validate() error {
+	if d.key != nil {
+		if err := d.key.validate(); err != nil {
+			return exprValidateError(d.key)
 		}
 	}
 
-	if !isType(d.X, identType, indexExprType, callExprType) {
-		return exprValidateError(d.X)
+	if !isType(d.x, identType, indexExprType, callExprType) {
+		return exprValidateError(d.x)
 	}
 
-	for _, v := range d.Body.List {
+	for _, v := range d.body.list {
 		if isType(v, blockDirectType, extendDirectType, sectionDirectType) {
-			return errors.Errorf("expected %s", v.Type())
+			return errors.Errorf("expected %s", v.typ())
 		}
 	}
 
-	if err := reportValidateError(d.Value.Validate, d.X.Validate); err != nil {
+	if err := reportValidateError(d.value.validate, d.x.validate); err != nil {
 		return err
 	}
 
-	return d.Body.Validate()
+	return d.body.validate()
 }
 
-func (d *BlockDirect) Validate() error {
-	for _, v := range d.Body.List {
+func (d *blockDirect) validate() error {
+	for _, v := range d.body.list {
 		if isType(v, extendDirectType, sectionDirectType) {
-			return errors.Errorf("expected %s", v.Type())
+			return errors.Errorf("expected %s", v.typ())
 		}
 	}
 
-	return reportValidateError(d.Name.Validate, d.Body.Validate)
+	return reportValidateError(d.name.validate, d.body.validate)
 }
 
-func (d *IncludeDirect) Validate() error {
-	if err := d.Path.Validate(); err != nil {
+func (d *includeDirect) validate() error {
+	if err := d.path.validate(); err != nil {
 		return err
 	}
 
-	if d.Doc.Extend != nil {
+	if d.doc.extend != nil {
 		return errors.New("con't use extend direct in included template")
 	}
 
-	for _, v := range d.Doc.Body.List {
+	for _, v := range d.doc.body.list {
 		if isType(v, blockDirectType, extendDirectType, sectionDirectType) {
-			return errors.Errorf("expected %s", v.Type())
+			return errors.Errorf("expected %s", v.typ())
 		}
 	}
 
-	return d.Doc.Body.Validate()
+	return d.doc.body.validate()
 }
 
-func (d *ExtendDirect) Validate() error {
-	if err := d.Path.Validate(); err != nil {
+func (d *extendDirect) validate() error {
+	if err := d.path.validate(); err != nil {
 		return err
 	}
 
-	for _, v := range d.Doc.Body.List {
+	for _, v := range d.doc.body.list {
 		if isType(v, extendDirectType) {
-			return errors.Errorf("expected %s", v.Type())
+			return errors.Errorf("expected %s", v.typ())
 		}
 	}
 
-	return d.Doc.Body.Validate()
+	return d.doc.body.validate()
 }
 
 func reportValidateError(fns ...func() error) (err error) {
@@ -215,7 +211,7 @@ func reportValidateError(fns ...func() error) (err error) {
 	return nil
 }
 
-func isType(expr Node, typeList ...reflect.Type) bool {
+func isType(expr node, typeList ...reflect.Type) bool {
 	for _, typ := range typeList {
 		if reflect.TypeOf(expr) == typ {
 			return true
@@ -225,6 +221,6 @@ func isType(expr Node, typeList ...reflect.Type) bool {
 	return false
 }
 
-func exprValidateError(e Expr) error {
-	return errors.Errorf("parse expr failed: %s", e.Literal())
+func exprValidateError(e expr) error {
+	return errors.Errorf("parse expr failed: %s", e.literal())
 }

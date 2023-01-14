@@ -8,22 +8,22 @@ import (
 )
 
 var (
-	_cache = &Documents{
+	_cache = &documents{
 		cache:  make(map[string]*Document),
 		locker: &sync.RWMutex{},
 	}
 )
 
-func NewDocument() *Document {
-	return &Document{blocks: make(map[string]*BlockDirect)}
+func newDocument() *Document {
+	return &Document{blocks: make(map[string]*blockDirect)}
 }
 
-type Documents struct {
+type documents struct {
 	cache  map[string]*Document
 	locker *sync.RWMutex
 }
 
-func (docs *Documents) AddDoc(name string, doc *Document) error {
+func (docs *documents) addDoc(name string, doc *Document) error {
 	docs.locker.Lock()
 	defer docs.locker.Unlock()
 	if _, ok := docs.cache[name]; ok {
@@ -35,7 +35,7 @@ func (docs *Documents) AddDoc(name string, doc *Document) error {
 	return nil
 }
 
-func (docs *Documents) Doc(name string) *Document {
+func (docs *documents) doc(name string) *Document {
 	docs.locker.RLock()
 	defer docs.locker.RUnlock()
 
@@ -47,14 +47,14 @@ func (docs *Documents) Doc(name string) *Document {
 }
 
 type Document struct {
-	Extend *ExtendDirect
-	Body   *SectionDirect
-	blocks map[string]*BlockDirect
+	extend *extendDirect
+	body   *sectionDirect
+	blocks map[string]*blockDirect
 
 	extended bool
 }
 
-func (doc *Document) Block(name string) *BlockDirect {
+func (doc *Document) Block(name string) *blockDirect {
 	if block, ok := doc.blocks[name]; ok {
 		return block
 	}
@@ -62,17 +62,17 @@ func (doc *Document) Block(name string) *BlockDirect {
 	return nil
 }
 
-func (doc *Document) Execute(p Params) (string, error) {
+func (doc *Document) execute(p Params) (string, error) {
 	sb := &strings.Builder{}
 	nd := doc
-	if doc.Extend != nil {
-		nd = doc.Extend.Doc
+	if doc.extend != nil {
+		nd = doc.extend.doc
 		for n, b := range doc.blocks {
 			p.setBlock(n, b)
 		}
 	}
-	for _, v := range nd.Body.List {
-		if str, err := v.Execute(p); err != nil {
+	for _, v := range nd.body.list {
+		if str, err := v.execute(p); err != nil {
 			return "", err
 		} else {
 			sb.WriteString(str)
@@ -82,19 +82,19 @@ func (doc *Document) Execute(p Params) (string, error) {
 	return sb.String(), nil
 }
 
-func (doc *Document) Append(x Direct) {
-	if doc.Body == nil {
-		doc.Body = &SectionDirect{}
+func (doc *Document) append(x direct) {
+	if doc.body == nil {
+		doc.body = &sectionDirect{}
 	}
-	doc.Body.List = append(doc.Body.List, x)
+	doc.body.list = append(doc.body.list, x)
 }
 
-func (d *Document) Validate() error {
-	if d.Extend != nil {
-		if err := d.Extend.Validate(); err != nil {
+func (d *Document) validate() error {
+	if d.extend != nil {
+		if err := d.extend.validate(); err != nil {
 			return err
 		}
 	}
 
-	return d.Body.Validate()
+	return d.body.validate()
 }

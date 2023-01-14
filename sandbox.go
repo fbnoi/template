@@ -55,7 +55,7 @@ func buildTemplate(content string) (*Document, error) {
 }
 
 func buildFileTemplate(path string) (doc *Document, err error) {
-	if doc = _cache.Doc(path); doc != nil {
+	if doc = _cache.doc(path); doc != nil {
 		return
 	}
 	var source *sourceCode
@@ -68,7 +68,7 @@ func buildFileTemplate(path string) (doc *Document, err error) {
 	if err != nil {
 		return
 	}
-	_cache.AddDoc(path, doc)
+	_cache.addDoc(path, doc)
 
 	return
 }
@@ -85,7 +85,7 @@ func buildSource(source *sourceCode) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc := NewDocument()
+	doc := newDocument()
 	err = build(doc, stream)
 
 	return doc, err
@@ -128,8 +128,8 @@ func putExprSandbox(sb *exprSandbox) {
 }
 
 type sandbox struct {
-	cursor AppendAble
-	stack  []AppendAble
+	cursor appendAble
+	stack  []appendAble
 }
 
 func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
@@ -137,7 +137,7 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 	var (
 		tok       *token
 		err       error
-		node      Direct
+		node      direct
 		subStream *tokenStream
 		box       *exprSandbox
 		ok        bool
@@ -161,8 +161,8 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 			return nil
 
 		case type_text:
-			node = &TextDirect{Text: &BasicLit{Kind: type_string, Value: tok}}
-			sb.cursor.Append(node)
+			node = &textDirect{text: &basicLit{kind: type_string, value: tok}}
+			sb.cursor.append(node)
 
 		case type_var_start:
 			if subStream, err = subStreamIf(stream, func(t *token) bool {
@@ -175,8 +175,8 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 				if err = box.build(subStream); err != nil {
 					return err
 				}
-				node = &ValueDirect{Tok: box.expr}
-				sb.cursor.Append(node)
+				node = &valueDirect{tok: box.expr}
+				sb.cursor.append(node)
 			}
 
 		case type_command_start:
@@ -186,47 +186,47 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 			}
 			switch tok.value {
 			case "endblock":
-				if _, ok = sb.cursor.(*BlockDirect); !ok {
+				if _, ok = sb.cursor.(*blockDirect); !ok {
 					return newUnexpectedToken(tok)
 				}
-				sb.cursor = sb.popStack()
+				sb.cursor = sb.popsStack()
 
 			case "endif":
-				if _, ok = sb.cursor.(*IfDirect); !ok {
+				if _, ok = sb.cursor.(*ifDirect); !ok {
 					return newUnexpectedToken(tok)
 				}
-				sb.cursor = sb.popStack()
+				sb.cursor = sb.popsStack()
 
 			case "endfor":
-				if _, ok = sb.cursor.(*ForDirect); !ok {
+				if _, ok = sb.cursor.(*forDirect); !ok {
 					return newUnexpectedToken(tok)
 				}
-				sb.cursor = sb.popStack()
+				sb.cursor = sb.popsStack()
 
 			case "extend":
-				node = &ExtendDirect{}
+				node = &extendDirect{}
 				if tok, err = nextTokenTypeShouldBe(stream, type_string); err != nil {
 					return err
 				}
-				node.(*ExtendDirect).Path = &BasicLit{Kind: tok.typ, Value: tok}
+				node.(*extendDirect).path = &basicLit{kind: tok.typ, value: tok}
 				if baseDoc, err := buildFileTemplate(tok.value); err != nil {
 					return err
 				} else {
 					baseDoc.extended = true
-					node.(*ExtendDirect).Doc = baseDoc
+					node.(*extendDirect).doc = baseDoc
 				}
-				doc.Extend = node.(*ExtendDirect)
+				doc.extend = node.(*extendDirect)
 
 			case "include":
-				node = &IncludeDirect{}
+				node = &includeDirect{}
 				if tok, err = nextTokenTypeShouldBe(stream, type_string); err != nil {
 					return err
 				}
-				node.(*IncludeDirect).Path = &BasicLit{Kind: tok.typ, Value: tok}
+				node.(*includeDirect).path = &basicLit{kind: tok.typ, value: tok}
 				if baseDoc, err = buildFileTemplate(tok.value); err != nil {
 					return err
 				} else {
-					node.(*IncludeDirect).Doc = baseDoc
+					node.(*includeDirect).doc = baseDoc
 				}
 				if tok, err = stream.next(); err != nil {
 					return err
@@ -242,34 +242,34 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 					if err = box.build(subStream); err != nil {
 						return err
 					}
-					node.(*IncludeDirect).Params = box.expr
+					node.(*includeDirect).params = box.expr
 
 					if token, err := stream.current(); err != nil {
 						return err
 					} else if token.value == "only" {
-						node.(*IncludeDirect).Only = true
+						node.(*includeDirect).only = true
 					}
 				}
-				sb.cursor.Append(node)
+				sb.cursor.append(node)
 
 			case "block":
 				if tok, err = nextTokenTypeShouldBe(stream, type_name); err != nil {
 					return err
 				}
-				node = &BlockDirect{Name: &BasicLit{Kind: type_string, Value: tok}}
+				node = &blockDirect{name: &basicLit{kind: type_string, value: tok}}
 				if _, ok := doc.blocks[tok.value]; ok {
 					return errors.Errorf("block %s has already exist", tok.value)
 				}
-				doc.blocks[tok.value] = node.(*BlockDirect)
-				sb.cursor.Append(node)
-				sb.cursor = sb.pushStack(node.(*BlockDirect))
+				doc.blocks[tok.value] = node.(*blockDirect)
+				sb.cursor.append(node)
+				sb.cursor = sb.pushStack(node.(*blockDirect))
 
 			case "set":
-				node = &AssignDirect{}
+				node = &assignDirect{}
 				if tok, err = nextTokenTypeShouldBe(stream, type_name); err != nil {
 					return err
 				}
-				node.(*AssignDirect).Lh = &Ident{Name: tok}
+				node.(*assignDirect).lh = &ident{name: tok}
 				if _, err = nextTokenValueShouldBe(stream, "="); err != nil {
 					return err
 				}
@@ -283,11 +283,11 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 				if err = box.build(subStream); err != nil {
 					return err
 				}
-				node.(*AssignDirect).Rh = box.expr
-				sb.cursor.Append(node)
+				node.(*assignDirect).rh = box.expr
+				sb.cursor.append(node)
 
 			case "elseif":
-				ifNode, ok := sb.cursor.(*IfDirect)
+				ifNode, ok := sb.cursor.(*ifDirect)
 				if !ok {
 					return newUnexpectedToken(tok)
 				}
@@ -301,17 +301,17 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 				if err = box.build(subStream); err != nil {
 					return err
 				}
-				node = &IfDirect{}
-				node.(*IfDirect).Cond = box.expr
-				ifNode.Else = node
-				sb.shiftStack(node.(*IfDirect))
+				node = &ifDirect{}
+				node.(*ifDirect).cond = box.expr
+				ifNode.el = node
+				sb.shiftStack(node.(*ifDirect))
 
 			case "else":
-				_, ok := sb.cursor.(*IfDirect)
+				_, ok := sb.cursor.(*ifDirect)
 				if !ok {
 					return newUnexpectedToken(tok)
 				}
-				sb.cursor.(*IfDirect).Else = &SectionDirect{}
+				sb.cursor.(*ifDirect).el = &sectionDirect{}
 
 			case "if":
 				if subStream, err = subStreamIf(stream, func(t *token) bool {
@@ -319,15 +319,15 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 				}); err != nil {
 					return err
 				}
-				node = &IfDirect{}
+				node = &ifDirect{}
 				box = getExprSandbox()
 				boxes = append(boxes, box)
 				if err = box.build(subStream); err != nil {
 					return err
 				}
-				node.(*IfDirect).Cond = box.expr
-				sb.cursor.Append(node)
-				sb.cursor = sb.pushStack(node.(*IfDirect))
+				node.(*ifDirect).cond = box.expr
+				sb.cursor.append(node)
+				sb.cursor = sb.pushStack(node.(*ifDirect))
 
 			case "for":
 				if subStream, err = subStreamIf(stream, func(t *token) bool {
@@ -335,23 +335,23 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 				}); err != nil {
 					return err
 				}
-				node = &ForDirect{}
+				node = &forDirect{}
 				switch subStream.size() {
 				case 2:
 					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
-					node.(*ForDirect).Value = &Ident{Name: tok}
+					node.(*forDirect).value = &ident{name: tok}
 				case 4:
 					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
-					node.(*ForDirect).Key = &Ident{Name: tok}
+					node.(*forDirect).key = &ident{name: tok}
 					subStream.skip(1)
 					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
-					node.(*ForDirect).Value = &Ident{Name: tok}
+					node.(*forDirect).value = &ident{name: tok}
 				default:
 					return errors.Errorf("Unexpected arg list %s in for loop", subStream.string())
 				}
@@ -366,9 +366,9 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 				if err = box.build(subStream); err != nil {
 					return err
 				}
-				node.(*ForDirect).X = box.expr
-				sb.cursor.Append(node)
-				sb.cursor = sb.pushStack(node.(*ForDirect))
+				node.(*forDirect).x = box.expr
+				sb.cursor.append(node)
+				sb.cursor = sb.pushStack(node.(*forDirect))
 
 			default:
 				return newUnexpectedToken(tok)
@@ -387,20 +387,20 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 	return nil
 }
 
-func (sb *sandbox) pushStack(node AppendAble) AppendAble {
+func (sb *sandbox) pushStack(node appendAble) appendAble {
 	sb.stack = append(sb.stack, sb.cursor)
 
 	return node
 }
 
-func (sb *sandbox) popStack() AppendAble {
+func (sb *sandbox) popsStack() appendAble {
 	tmp := sb.stack[len(sb.stack)-1]
 	sb.stack = sb.stack[:len(sb.stack)-1]
 
 	return tmp
 }
 
-func (sb *sandbox) shiftStack(node AppendAble) {
+func (sb *sandbox) shiftStack(node appendAble) {
 	sb.cursor = node
 }
 
@@ -410,10 +410,9 @@ func (sb *sandbox) reset() {
 }
 
 type exprSandbox struct {
-	expr Expr
-
-	exprStack []Expr
-	opStack   []*token
+	expr       expr
+	exprsStack []expr
+	opsStack   []*token
 }
 
 func (esb *exprSandbox) build(stream *tokenStream) error {
@@ -431,8 +430,8 @@ func (esb *exprSandbox) build(stream *tokenStream) error {
 		}
 		switch tok.typ {
 		case type_number, type_string:
-			b := &BasicLit{Kind: tok.typ, Value: tok}
-			esb.exprStack = append(esb.exprStack, b)
+			b := &basicLit{kind: tok.typ, value: tok}
+			esb.exprsStack = append(esb.exprsStack, b)
 
 		case type_name:
 			if strings.Contains(internalKeyWords, fmt.Sprintf("_%s_", tok.value)) {
@@ -440,89 +439,89 @@ func (esb *exprSandbox) build(stream *tokenStream) error {
 			}
 			if stream.hasNext() {
 				if nextToken, err := stream.peek(1); err == nil && nextToken.value == "(" {
-					esb.exprStack = append(esb.exprStack, &CallExpr{Func: &Ident{Name: tok}})
+					esb.exprsStack = append(esb.exprsStack, &callExpr{fn: &ident{name: tok}})
 					continue
 				}
 			}
-			esb.exprStack = append(esb.exprStack, &Ident{Name: tok})
+			esb.exprsStack = append(esb.exprsStack, &ident{name: tok})
 
 		case type_operator:
 			switch tok.value {
 			case ")":
 				for {
-					topOp = esb.opStack[len(esb.opStack)-1]
-					esb.opStack = esb.opStack[:len(esb.opStack)-1]
+					topOp = esb.opsStack[len(esb.opsStack)-1]
+					esb.opsStack = esb.opsStack[:len(esb.opsStack)-1]
 					if topOp.value != "(" {
-						esb.mergeExprStack(topOp)
+						esb.mergeExprsStack(topOp)
 						continue
 					}
-					if topOp.value == "(" || len(esb.opStack) == 0 {
+					if topOp.value == "(" || len(esb.opsStack) == 0 {
 						break
 					}
 				}
 
 			case "]":
 				for {
-					topOp = esb.opStack[len(esb.opStack)-1]
-					esb.opStack = esb.opStack[:len(esb.opStack)-1]
-					esb.mergeExprStack(topOp)
-					if topOp.value == "[" || len(esb.opStack) == 0 {
+					topOp = esb.opsStack[len(esb.opsStack)-1]
+					esb.opsStack = esb.opsStack[:len(esb.opsStack)-1]
+					esb.mergeExprsStack(topOp)
+					if topOp.value == "[" || len(esb.opsStack) == 0 {
 						break
 					}
 				}
 
 			case "(":
-				esb.opStack = append(esb.opStack, tok)
+				esb.opsStack = append(esb.opsStack, tok)
 
 			case "[":
-				if len(esb.opStack) == 0 {
-					esb.opStack = append(esb.opStack, tok)
+				if len(esb.opsStack) == 0 {
+					esb.opsStack = append(esb.opsStack, tok)
 					continue
 				}
 				for {
-					topOp = esb.opStack[len(esb.opStack)-1]
+					topOp = esb.opsStack[len(esb.opsStack)-1]
 					if topOp.value != "." {
 						break
 					}
-					esb.mergeExprStack(topOp)
-					esb.opStack = esb.opStack[:len(esb.opStack)-1]
+					esb.mergeExprsStack(topOp)
+					esb.opsStack = esb.opsStack[:len(esb.opsStack)-1]
 				}
-				esb.opStack = append(esb.opStack, tok)
+				esb.opsStack = append(esb.opsStack, tok)
 
 			default:
 				if !allowOp(tok) {
 					return newUnexpectedToken(tok)
 				}
-				if len(esb.opStack) == 0 {
-					esb.opStack = append(esb.opStack, tok)
+				if len(esb.opsStack) == 0 {
+					esb.opsStack = append(esb.opsStack, tok)
 					continue
 				}
-				topOp = esb.opStack[len(esb.opStack)-1]
+				topOp = esb.opsStack[len(esb.opsStack)-1]
 				for compare(topOp.value, tok.value) {
-					esb.mergeExprStack(topOp)
-					esb.opStack = esb.opStack[:len(esb.opStack)-1]
-					if len(esb.opStack) == 0 {
+					esb.mergeExprsStack(topOp)
+					esb.opsStack = esb.opsStack[:len(esb.opsStack)-1]
+					if len(esb.opsStack) == 0 {
 						break
 					}
-					topOp = esb.opStack[len(esb.opStack)-1]
+					topOp = esb.opsStack[len(esb.opsStack)-1]
 				}
-				esb.opStack = append(esb.opStack, tok)
+				esb.opsStack = append(esb.opsStack, tok)
 
 			}
 
 		case type_punctuation:
 			switch tok.value {
 			case ",":
-				topOp = esb.opStack[len(esb.opStack)-1]
+				topOp = esb.opsStack[len(esb.opsStack)-1]
 				for topOp.value != "(" {
-					esb.mergeExprStack(topOp)
-					esb.opStack = esb.opStack[:len(esb.opStack)-1]
-					if len(esb.opStack) == 0 {
+					esb.mergeExprsStack(topOp)
+					esb.opsStack = esb.opsStack[:len(esb.opsStack)-1]
+					if len(esb.opsStack) == 0 {
 						break
 					}
-					topOp = esb.opStack[len(esb.opStack)-1]
+					topOp = esb.opsStack[len(esb.opsStack)-1]
 				}
-				esb.mergeExprStack(tok)
+				esb.mergeExprsStack(tok)
 
 			default:
 				return newUnexpectedToken(tok)
@@ -534,75 +533,75 @@ func (esb *exprSandbox) build(stream *tokenStream) error {
 		}
 	}
 
-	for i := len(esb.opStack) - 1; i >= 0; i-- {
-		topOp = esb.opStack[i]
-		esb.opStack = esb.opStack[:i]
-		if err = esb.mergeExprStack(topOp); err != nil {
+	for i := len(esb.opsStack) - 1; i >= 0; i-- {
+		topOp = esb.opsStack[i]
+		esb.opsStack = esb.opsStack[:i]
+		if err = esb.mergeExprsStack(topOp); err != nil {
 			return err
 		}
 	}
 
-	if len(esb.exprStack) != 1 {
+	if len(esb.exprsStack) != 1 {
 		return errors.Errorf("parse expr failed1: %s", stream.string())
 	}
-	esb.expr = esb.exprStack[0]
+	esb.expr = esb.exprsStack[0]
 
 	return nil
 }
 
 func (esb *exprSandbox) reset() {
 	esb.expr = nil
-	esb.exprStack = esb.exprStack[0:0]
-	esb.opStack = esb.opStack[0:0]
+	esb.exprsStack = esb.exprsStack[0:0]
+	esb.opsStack = esb.opsStack[0:0]
 }
 
-func (esb *exprSandbox) mergeExprStack(tok *token) error {
-	if len(esb.exprStack) < 2 {
+func (esb *exprSandbox) mergeExprsStack(tok *token) error {
+	if len(esb.exprsStack) < 2 {
 		return newUnexpectedToken(tok)
 	}
-	var expr1, expr2 = esb.exprStack[len(esb.exprStack)-1], esb.exprStack[len(esb.exprStack)-2]
+	var expr1, expr2 = esb.exprsStack[len(esb.exprsStack)-1], esb.exprsStack[len(esb.exprsStack)-2]
 	switch tok.value {
 	case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or":
-		esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
-		esb.exprStack = append(esb.exprStack, &BinaryExpr{X: expr2, Op: tok, Y: expr1})
+		esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
+		esb.exprsStack = append(esb.exprsStack, &binaryExpr{x: expr2, op: tok, y: expr1})
 
 	case "not", "++", "--":
-		esb.exprStack[len(esb.exprStack)-1] = &SingleExpr{X: expr1, Op: tok}
+		esb.exprsStack[len(esb.exprsStack)-1] = &singleExpr{x: expr1, op: tok}
 
 	case "[", ".":
-		esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
-		esb.exprStack = append(esb.exprStack, &IndexExpr{X: expr2, Op: tok, Index: expr1})
+		esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
+		esb.exprsStack = append(esb.exprsStack, &indexExpr{x: expr2, op: tok, index: expr1})
 
 	case ",":
-		if list, ok := expr2.(*ListExpr); ok {
-			list.List = append(list.List, expr1)
-			esb.exprStack = esb.exprStack[:len(esb.exprStack)-1]
+		if lExpr, ok := expr2.(*listExpr); ok {
+			lExpr.list = append(lExpr.list, expr1)
+			esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-1]
 		} else {
-			list := &ListExpr{}
-			list.List = append(list.List, expr1)
-			esb.exprStack[len(esb.exprStack)-1] = list
+			lExpr := &listExpr{}
+			lExpr.list = append(lExpr.list, expr1)
+			esb.exprsStack[len(esb.exprsStack)-1] = lExpr
 		}
 
 	case ")":
-		if list, ok := expr2.(*ListExpr); ok {
-			if len(esb.exprStack) < 3 {
-				return errors.Errorf("Unexpected arg list %s", list.Literal())
+		if lExpr, ok := expr2.(*listExpr); ok {
+			if len(esb.exprsStack) < 3 {
+				return errors.Errorf("Unexpected arg list %s", lExpr.literal())
 			}
-			list.List = append(list.List, expr1)
-			expr3 := esb.exprStack[len(esb.exprStack)-3]
-			if fn, ok := expr3.(*CallExpr); !ok {
-				return errors.Errorf("Unexpected tokens %s", expr3.Literal())
+			lExpr.list = append(lExpr.list, expr1)
+			expr3 := esb.exprsStack[len(esb.exprsStack)-3]
+			if fnExpr, ok := expr3.(*callExpr); !ok {
+				return errors.Errorf("Unexpected tokens %s", expr3.literal())
 			} else {
-				fn.Args = list
+				fnExpr.args = lExpr
 			}
-			esb.exprStack = esb.exprStack[:len(esb.exprStack)-2]
-		} else if fn, ok := expr2.(*CallExpr); ok {
-			list := &ListExpr{}
-			list.List = append(list.List, expr1)
-			fn.Args = list
-			esb.exprStack = esb.exprStack[:len(esb.exprStack)-1]
+			esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
+		} else if fnExpr, ok := expr2.(*callExpr); ok {
+			lExpr := &listExpr{}
+			lExpr.list = append(lExpr.list, expr1)
+			fnExpr.args = lExpr
+			esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-1]
 		} else {
-			return errors.Errorf("Unexpected tokens %s", expr2.Literal())
+			return errors.Errorf("Unexpected tokens %s", expr2.literal())
 		}
 
 	default:

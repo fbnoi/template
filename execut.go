@@ -8,16 +8,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (e *Ident) Execute(p Params) (reflect.Value, error) {
-	return Get(p, e.Name.value)
+func (e *ident) execute(p Params) (reflect.Value, error) {
+	return Get(p, e.name.value)
 }
 
-func (e *BasicLit) Execute(Params) (reflect.Value, error) {
-	vs := e.Value.value
-	if e.Kind == type_string {
+func (e *basicLit) execute(Params) (reflect.Value, error) {
+	vs := e.value.value
+	if e.kind == type_string {
 		return reflect.ValueOf(vs), nil
 	}
-	if e.Kind == type_number {
+	if e.kind == type_number {
 		if i, err := strconv.Atoi(vs); err == nil {
 			return reflect.ValueOf(i), nil
 		}
@@ -26,32 +26,32 @@ func (e *BasicLit) Execute(Params) (reflect.Value, error) {
 		}
 	}
 
-	return zeroValue, newUnexpectedToken(e.Value)
+	return zeroValue, newUnexpectedToken(e.value)
 }
 
-func (e *ListExpr) Execute(Params) (reflect.Value, error) {
+func (e *listExpr) execute(Params) (reflect.Value, error) {
 	return zeroValue, nil
 }
 
-func (e *IndexExpr) Execute(p Params) (reflect.Value, error) {
-	x, err := e.X.Execute(p)
+func (e *indexExpr) execute(p Params) (reflect.Value, error) {
+	x, err := e.x.execute(p)
 	if err != nil {
 		return zeroValue, err
 	}
 	vx := x.Interface()
-	op := e.Op.value
+	op := e.op.value
 	switch op {
 	case ".":
-		switch index := e.Index.(type) {
-		case *Ident:
-			return Get(vx, index.Name.value)
-		case *CallExpr:
-			if fn, err := method(x, index.Func.Name.value); err != nil {
+		switch index := e.index.(type) {
+		case *ident:
+			return Get(vx, index.name.value)
+		case *callExpr:
+			if fn, err := method(x, index.fn.name.value); err != nil {
 				return zeroValue, err
 			} else {
 				argv := []reflect.Value{}
-				for _, v := range index.Args.List {
-					if arg, err := v.Execute(p); err == nil {
+				for _, v := range index.args.list {
+					if arg, err := v.execute(p); err == nil {
 						argv = append(argv, arg)
 					} else {
 						return zeroValue, err
@@ -62,12 +62,12 @@ func (e *IndexExpr) Execute(p Params) (reflect.Value, error) {
 			}
 
 		default:
-			return zeroValue, newUnexpectedToken(e.Op)
+			return zeroValue, newUnexpectedToken(e.op)
 
 		}
 
 	case "[":
-		v, err := e.Index.Execute(p)
+		v, err := e.index.execute(p)
 		if err != nil {
 			return zeroValue, err
 		}
@@ -87,13 +87,13 @@ func (e *IndexExpr) Execute(p Params) (reflect.Value, error) {
 	}
 }
 
-func (e *CallExpr) Execute(p Params) (reflect.Value, error) {
-	if fn, err := method(reflect.ValueOf(p), e.Func.Name.value); err != nil {
+func (e *callExpr) execute(p Params) (reflect.Value, error) {
+	if fn, err := method(reflect.ValueOf(p), e.fn.name.value); err != nil {
 		return zeroValue, err
 	} else {
 		argv := []reflect.Value{}
-		for _, v := range e.Args.List {
-			if arg, err := v.Execute(p); err == nil {
+		for _, v := range e.args.list {
+			if arg, err := v.execute(p); err == nil {
 				argv = append(argv, arg)
 			} else {
 				return zeroValue, err
@@ -104,13 +104,13 @@ func (e *CallExpr) Execute(p Params) (reflect.Value, error) {
 	}
 }
 
-func (e *BinaryExpr) Execute(p Params) (reflect.Value, error) {
-	op := e.Op.value
-	x, err := e.X.Execute(p)
+func (e *binaryExpr) execute(p Params) (reflect.Value, error) {
+	op := e.op.value
+	x, err := e.x.execute(p)
 	if err != nil {
 		return zeroValue, err
 	}
-	y, err := e.Y.Execute(p)
+	y, err := e.y.execute(p)
 	if err != nil {
 		return zeroValue, err
 	}
@@ -137,50 +137,50 @@ func (e *BinaryExpr) Execute(p Params) (reflect.Value, error) {
 		return neq(x, y)
 	}
 
-	return zeroValue, newUnexpectedToken(e.Op)
+	return zeroValue, newUnexpectedToken(e.op)
 }
 
-func (e *SingleExpr) Execute(p Params) (reflect.Value, error) {
-	x, err := e.X.Execute(p)
+func (e *singleExpr) execute(p Params) (reflect.Value, error) {
+	x, err := e.x.execute(p)
 	if err != nil {
 		return zeroValue, err
 	}
-	switch e.Op.value {
+	switch e.op.value {
 	case "not":
 		r := x.IsZero()
 
 		return reflect.ValueOf(!r), nil
 	}
 
-	return zeroValue, newUnexpectedToken(e.Op)
+	return zeroValue, newUnexpectedToken(e.op)
 }
 
-func (d *TextDirect) Execute(p Params) (string, error) {
-	return d.Text.Value.value, nil
+func (d *textDirect) execute(p Params) (string, error) {
+	return d.text.value.value, nil
 }
 
-func (d *ValueDirect) Execute(p Params) (string, error) {
-	if v, err := d.Tok.Execute(p); err != nil {
+func (d *valueDirect) execute(p Params) (string, error) {
+	if v, err := d.tok.execute(p); err != nil {
 		return "", err
 	} else {
 		return strValue(v)
 	}
 }
 
-func (d *AssignDirect) Execute(p Params) (string, error) {
-	yx, err := d.Rh.Execute(p)
+func (d *assignDirect) execute(p Params) (string, error) {
+	yx, err := d.rh.execute(p)
 	if err != nil {
 		return "", err
 	}
-	p[d.Lh.Name.value] = yx
+	p[d.lh.name.value] = yx
 
 	return "", nil
 }
 
-func (d *SectionDirect) Execute(p Params) (string, error) {
+func (d *sectionDirect) execute(p Params) (string, error) {
 	sb := &strings.Builder{}
-	for _, x := range d.List {
-		if str, err := x.Execute(p); err != nil {
+	for _, x := range d.list {
+		if str, err := x.execute(p); err != nil {
 			return "", err
 		} else {
 			sb.WriteString(str)
@@ -190,30 +190,30 @@ func (d *SectionDirect) Execute(p Params) (string, error) {
 	return sb.String(), nil
 }
 
-func (d *IfDirect) Execute(p Params) (string, error) {
-	if conv, err := d.Cond.Execute(p); err != nil {
+func (d *ifDirect) execute(p Params) (string, error) {
+	if conv, err := d.cond.execute(p); err != nil {
 		return "", err
 	} else {
 		conv = uncoverInterface(conv)
 		if conv.IsNil() || conv.IsZero() {
-			if d.Else != nil {
-				return d.Else.Execute(p)
+			if d.el != nil {
+				return d.el.execute(p)
 			}
 
 			return "", nil
 		} else {
-			return d.Body.Execute(p)
+			return d.body.execute(p)
 		}
 	}
 }
 
-func (d *ForDirect) Execute(p Params) (string, error) {
+func (d *forDirect) execute(p Params) (string, error) {
 	var (
 		str string
 		err error
 		v   reflect.Value
 	)
-	v, err = d.X.Execute(p)
+	v, err = d.x.execute(p)
 	if err != nil {
 		return "", nil
 	}
@@ -224,11 +224,11 @@ func (d *ForDirect) Execute(p Params) (string, error) {
 	case reflect.Map:
 		iter := v.MapRange()
 		for iter.Next() {
-			if d.Key != nil {
-				np[d.Key.Name.value] = iter.Key()
+			if d.key != nil {
+				np[d.key.name.value] = iter.Key()
 			}
-			np[d.Key.Name.value] = iter.Value()
-			if str, err = d.Body.Execute(np); err != nil {
+			np[d.key.name.value] = iter.Value()
+			if str, err = d.body.execute(np); err != nil {
 				return "", err
 			} else {
 				sb.WriteString(str)
@@ -237,11 +237,11 @@ func (d *ForDirect) Execute(p Params) (string, error) {
 
 	case reflect.Slice, reflect.Array, reflect.String:
 		for i := 0; i < v.Len(); i++ {
-			if d.Key != nil {
-				np[d.Key.Name.value] = i
+			if d.key != nil {
+				np[d.key.name.value] = i
 			}
-			np[d.Key.Name.value] = v.Index(i)
-			if str, err = d.Body.Execute(np); err != nil {
+			np[d.key.name.value] = v.Index(i)
+			if str, err = d.body.execute(np); err != nil {
 				return "", err
 			} else {
 				sb.WriteString(str)
@@ -255,59 +255,55 @@ func (d *ForDirect) Execute(p Params) (string, error) {
 	return sb.String(), nil
 }
 
-func (d *BlockDirect) Execute(p Params) (string, error) {
+func (d *blockDirect) execute(p Params) (string, error) {
 	sb := &strings.Builder{}
 	var (
 		str string
 		err error
 	)
-	for _, v := range d.Body.List {
-		if str, err = v.Execute(p); err != nil {
+	for _, v := range d.body.list {
+		if str, err = v.execute(p); err != nil {
 			return "", err
 		} else {
 			sb.WriteString(str)
 		}
 	}
 
-	if b := p.getBlock(d.Name.Value.value); b != nil && b != d {
+	if b := p.getBlock(d.name.value.value); b != nil && b != d {
 		np := cop(p)
 		np.setBlockRemains(sb.String())
 
-		return b.Execute(np)
+		return b.execute(np)
 	}
 
 	return sb.String(), nil
 }
 
-func (d *IncludeDirect) Execute(p Params) (string, error) {
-	if d.Params != nil {
-		val, err := d.Params.Execute(p)
+func (d *includeDirect) execute(p Params) (string, error) {
+	if d.params != nil {
+		val, err := d.params.execute(p)
 		if err != nil {
 			return "", err
 		}
 		if val.Type() != reflect.TypeOf(p) {
 			return "", errors.Errorf("con't use type %s as params", val.Type())
 		}
-		if d.Only {
-			return d.Doc.Body.Execute(val.Interface().(Params))
+		if d.only {
+			return d.doc.body.execute(val.Interface().(Params))
 		}
 		np := cop(p)
 		for k, v := range val.Interface().(Params) {
 			np[k] = v
 		}
 
-		return d.Doc.Body.Execute(np)
+		return d.doc.body.execute(np)
 	}
 
-	return d.Doc.Body.Execute(p)
+	return d.doc.body.execute(p)
 }
 
-func (d *ExtendDirect) Execute(p Params) (string, error) {
+func (d *extendDirect) execute(p Params) (string, error) {
 	panic("unreachable")
-}
-
-func (d *SetDirect) Execute(p Params) (string, error) {
-	return d.Assign.Execute(p)
 }
 
 func strValue(v reflect.Value) (string, error) {

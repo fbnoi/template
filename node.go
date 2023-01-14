@@ -6,271 +6,247 @@ import (
 	"strings"
 )
 
-const NoPos Pos = 0
-
-type Pos int
-
-func (p Pos) Position() Pos {
-	return p
-}
-
-type Node interface {
-	Validate() error
+type node interface {
+	validate() error
 }
 
 // All expression nodes implement the Expr interface.
-type Expr interface {
-	Node
+type expr interface {
+	node
 	exprNode()
-	Literal() string
-	Execute(p Params) (reflect.Value, error)
+	literal() string
+	execute(p Params) (reflect.Value, error)
 }
 
 // All statement nodes implement the Direct interface.
-type Direct interface {
-	Node
+type direct interface {
+	node
 	directNode()
-	Execute(p Params) (string, error)
-	Type() string
+	execute(p Params) (string, error)
+	typ() string
 }
 
-type AppendAble interface {
-	Append(Direct)
-}
-
-type DirectParam struct {
-	Name  string
-	Value Expr
+type appendAble interface {
+	append(direct)
 }
 
 // ----------------------------------------------------------------------------
 // ExprNode
 
 type (
-	Ident struct {
-		Name *token // identifier name; not nil
+	ident struct {
+		name *token // identifier name; not nil
 	}
 
-	BasicLit struct {
-		Kind  int    // type_number or type_string
-		Value *token // literal string; e.g. 42, 0x7f, 3.14, 1e-9, 2.4i, 'a', etc.; not nil
+	basicLit struct {
+		kind  int    // type_number or type_string
+		value *token // literal string; e.g. 42, 0x7f, 3.14, 1e-9, 2.4i, 'a', etc.; not nil
 	}
 
-	ListExpr struct {
-		List []Expr
+	listExpr struct {
+		list []expr
 	}
 
-	// An IndexExpr node represents an expression followed by an index.
-	IndexExpr struct {
-		X     Expr   // expression; not nil
-		Index Expr   // index expression; not nil
-		Op    *token // not nil
+	// An indexExpr node represents an expression followed by an index.
+	indexExpr struct {
+		x     expr   // expression; not nil
+		index expr   // index expression; not nil
+		op    *token // not nil
 	}
 
-	// A CallExpr node represents an expression followed by an argument list.
-	CallExpr struct {
-		Func *Ident    // function expression; not nil
-		Args *ListExpr // function arguments; or nil
+	// A callExpr node represents an expression followed by an argument list.
+	callExpr struct {
+		fn   *ident    // function expression; not nil
+		args *listExpr // function arguments; or nil
 	}
 
-	// A BinaryExpr node represents a binary expression.
-	BinaryExpr struct {
-		X  Expr   // left operand; not nil
-		Op *token // operator; not nil
-		Y  Expr   // right operand; not nil
+	// A binaryExpr node represents a binary expression.
+	binaryExpr struct {
+		x  expr   // left operand; not nil
+		op *token // operator; not nil
+		y  expr   // right operand; not nil
 	}
 
 	// A Single node represents a single expression.
-	SingleExpr struct {
-		X  Expr   // expr; not nil
-		Op *token // operator; not nil
+	singleExpr struct {
+		x  expr   // expr; not nil
+		op *token // operator; not nil
 	}
 )
 
 // exprNode() ensures that only expression/type nodes can be
 // assigned to an Expr.
-func (*Ident) exprNode()      {}
-func (*BasicLit) exprNode()   {}
-func (*ListExpr) exprNode()   {}
-func (*IndexExpr) exprNode()  {}
-func (*CallExpr) exprNode()   {}
-func (*BinaryExpr) exprNode() {}
-func (*SingleExpr) exprNode() {}
+func (*ident) exprNode()      {}
+func (*basicLit) exprNode()   {}
+func (*listExpr) exprNode()   {}
+func (*indexExpr) exprNode()  {}
+func (*callExpr) exprNode()   {}
+func (*binaryExpr) exprNode() {}
+func (*singleExpr) exprNode() {}
 
 // ----------------------------------------------------------------------------
 // Statements
 
 type (
 
-	// An AssignDirect node represents an assignment or
+	// An assignDirect node represents an assignment or
 	// a short variable declaration.
 	//
-	AssignDirect struct {
-		Lh *Ident
-		Rh Expr
+	assignDirect struct {
+		lh *ident
+		rh expr
 	}
 
-	// A SectionDirect node represents a braced statement list.
-	SectionDirect struct {
-		List []Direct
+	// A sectionDirect node represents a braced statement list.
+	sectionDirect struct {
+		list []direct
 	}
 
-	// TextDirect
-	TextDirect struct {
-		Text *BasicLit // text content BasicLit
+	// textDirect
+	textDirect struct {
+		text *basicLit // text content basicLit
 	}
 
-	ValueDirect struct {
-		Tok Expr // value expr
+	valueDirect struct {
+		tok expr // value expr
 	}
 
-	SetDirect struct {
-		Assign *AssignDirect
+	ifDirect struct {
+		cond expr           // condition; not nil
+		el   direct         // else branch; or nil
+		body *sectionDirect // not nil
 	}
 
-	// An IfDirect node represents an if statement.
-	IfDirect struct {
-		Cond Expr           // condition; not nil
-		Else Direct         // else branch; or nil
-		Body *SectionDirect // not nil
+	forDirect struct {
+		key, value *ident // Key may be nil, Value, ident expr
+		x          expr   // value to range over
+		body       *sectionDirect
 	}
 
-	// A ForDirect represents a for statement.
-	ForDirect struct {
-		Key, Value *Ident // Key may be nil, Value, Ident expr
-		X          Expr   // value to range over
-		Body       *SectionDirect
+	blockDirect struct {
+		name *basicLit      // name of block; not nil
+		body *sectionDirect // body of block; not nil
 	}
 
-	//
-	BlockDirect struct {
-		Name *BasicLit      // name of block; not nil
-		Body *SectionDirect // body of block; not nil
+	includeDirect struct {
+		path   *basicLit // string of template path
+		params expr      // parameters injected into include doc
+		doc    *Document // not nil
+		only   bool
 	}
 
-	IncludeDirect struct {
-		Path   *BasicLit // string of template path
-		Params Expr      // parameters injected into include doc
-		Doc    *Document // not nil
-		Only   bool
-	}
-
-	ExtendDirect struct {
-		Path *BasicLit // string of template path
-		Doc  *Document
+	extendDirect struct {
+		path *basicLit // string of template path
+		doc  *Document
 	}
 )
 
-// DirectNode() ensures that only statement nodes can be
+// directNode() ensures that only statement nodes can be
 // assigned to a Direct.
 //
 
-func (*TextDirect) directNode()    {}
-func (*ValueDirect) directNode()   {}
-func (*AssignDirect) directNode()  {}
-func (*SectionDirect) directNode() {}
-func (*IfDirect) directNode()      {}
-func (*ForDirect) directNode()     {}
-func (*BlockDirect) directNode()   {}
-func (*IncludeDirect) directNode() {}
-func (*ExtendDirect) directNode()  {}
-func (*SetDirect) directNode()     {}
+func (*textDirect) directNode()    {}
+func (*valueDirect) directNode()   {}
+func (*assignDirect) directNode()  {}
+func (*sectionDirect) directNode() {}
+func (*ifDirect) directNode()      {}
+func (*forDirect) directNode()     {}
+func (*blockDirect) directNode()   {}
+func (*includeDirect) directNode() {}
+func (*extendDirect) directNode()  {}
 func (*Document) directNode()      {}
 
-func (*TextDirect) Type() string {
-	return "TextDirect"
+func (*textDirect) typ() string {
+	return "textDirect"
 }
-func (*ValueDirect) Type() string {
-	return "ValueDirect"
+func (*valueDirect) typ() string {
+	return "valueDirect"
 }
-func (*AssignDirect) Type() string {
-	return "AssignDirect"
+func (*assignDirect) typ() string {
+	return "assignDirect"
 }
-func (*SectionDirect) Type() string {
-	return "SectionDirect"
+func (*sectionDirect) typ() string {
+	return "sectionDirect"
 }
-func (*IfDirect) Type() string {
-	return "IfDirect"
+func (*ifDirect) typ() string {
+	return "ifDirect"
 }
-func (*ForDirect) Type() string {
-	return "ForDirect"
+func (*forDirect) typ() string {
+	return "forDirect"
 }
-func (*BlockDirect) Type() string {
-	return "BlockDirect"
+func (*blockDirect) typ() string {
+	return "blockDirect"
 }
-func (*IncludeDirect) Type() string {
-	return "IncludeDirect"
+func (*includeDirect) typ() string {
+	return "includeDirect"
 }
-func (*ExtendDirect) Type() string {
-	return "ExtendDirect"
+func (*extendDirect) typ() string {
+	return "extendDirect"
 }
-func (*SetDirect) Type() string {
-	return "SetDirect"
-}
-func (*Document) Type() string {
+func (*Document) typ() string {
 	return "Document"
 }
 
-// Append() ensures that only statement nodes can be
+// append() ensures that only statement nodes can be
 // assigned to a Direct.
-func (s *IfDirect) Append(x Direct) {
-	if s.Else != nil {
-		if _, ok := s.Else.(*SectionDirect); ok {
-			s.Else.(*SectionDirect).List = append(s.Else.(*SectionDirect).List, x)
+func (s *ifDirect) append(x direct) {
+	if s.el != nil {
+		if _, ok := s.el.(*sectionDirect); ok {
+			s.el.(*sectionDirect).list = append(s.el.(*sectionDirect).list, x)
 		}
 	}
-	if s.Body == nil {
-		s.Body = &SectionDirect{}
+	if s.body == nil {
+		s.body = &sectionDirect{}
 	}
-	s.Body.List = append(s.Body.List, x)
+	s.body.list = append(s.body.list, x)
 }
 
-func (s *ForDirect) Append(x Direct) {
-	if s.Body == nil {
-		s.Body = &SectionDirect{}
+func (s *forDirect) append(x direct) {
+	if s.body == nil {
+		s.body = &sectionDirect{}
 	}
-	s.Body.List = append(s.Body.List, x)
+	s.body.list = append(s.body.list, x)
 }
 
-func (s *BlockDirect) Append(x Direct) {
-	if s.Body == nil {
-		s.Body = &SectionDirect{}
+func (s *blockDirect) append(x direct) {
+	if s.body == nil {
+		s.body = &sectionDirect{}
 	}
-	s.Body.List = append(s.Body.List, x)
+	s.body.list = append(s.body.list, x)
 }
 
-func (e *Ident) Literal() string {
-	return e.Name.value
+func (e *ident) literal() string {
+	return e.name.value
 }
-func (e *BasicLit) Literal() string {
-	return e.Value.value
+func (e *basicLit) literal() string {
+	return e.value.value
 }
-func (e *ListExpr) Literal() string {
+func (e *listExpr) literal() string {
 	var ts []string
-	for _, v := range e.List {
-		ts = append(ts, v.Literal())
+	for _, v := range e.list {
+		ts = append(ts, v.literal())
 	}
 
 	return strings.Join(ts, ",")
 }
-func (e *IndexExpr) Literal() string {
+func (e *indexExpr) literal() string {
 
-	if e.Op.value == "." {
-		return fmt.Sprintf("%s.%s", e.X.Literal(), e.Index.Literal())
+	if e.op.value == "." {
+		return fmt.Sprintf("%s.%s", e.x.literal(), e.index.literal())
 	}
 
-	if e.Op.value == "[" {
-		return fmt.Sprintf("%s[%s]", e.X.Literal(), e.Index.Literal())
+	if e.op.value == "[" {
+		return fmt.Sprintf("%s[%s]", e.x.literal(), e.index.literal())
 	}
 
-	return "<IndexExpr ParseError>"
+	return "<indexExpr ParseError>"
 }
-func (e *CallExpr) Literal() string {
-	return fmt.Sprintf("%s(%s)", e.Func.Literal(), e.Args.Literal())
+func (e *callExpr) literal() string {
+	return fmt.Sprintf("%s(%s)", e.fn.literal(), e.args.literal())
 }
-func (e *BinaryExpr) Literal() string {
-	return fmt.Sprintf("%s %s %s", e.X.Literal(), e.Op.value, e.Y.Literal())
+func (e *binaryExpr) literal() string {
+	return fmt.Sprintf("%s %s %s", e.x.literal(), e.op.value, e.y.literal())
 }
-func (e *SingleExpr) Literal() string {
-	return fmt.Sprintf("%s %s", e.Op.value, e.X.Literal())
+func (e *singleExpr) literal() string {
+	return fmt.Sprintf("%s %s", e.op.value, e.x.literal())
 }

@@ -7,9 +7,9 @@ var (
 
 type Params map[string]any
 
-func (p Params) getBlock(name string) *BlockDirect {
+func (p Params) getBlock(name string) *blockDirect {
 	if _blocks, ok := p[block_store_name]; ok {
-		_blocksMap := _blocks.(map[string]*BlockDirect)
+		_blocksMap := _blocks.(map[string]*blockDirect)
 		if block, ok := _blocksMap[name]; ok {
 			return block
 		}
@@ -18,15 +18,15 @@ func (p Params) getBlock(name string) *BlockDirect {
 	return nil
 }
 
-func (p Params) setBlock(name string, block *BlockDirect) {
+func (p Params) setBlock(name string, block *blockDirect) {
 	if block == nil {
 		return
 	}
-	var blocks map[string]*BlockDirect
+	var blocks map[string]*blockDirect
 	if _, ok := p[block_store_name]; ok {
-		blocks = p[block_store_name].(map[string]*BlockDirect)
+		blocks = p[block_store_name].(map[string]*blockDirect)
 	} else {
-		blocks = make(map[string]*BlockDirect)
+		blocks = make(map[string]*blockDirect)
 	}
 	blocks[name] = block
 	p[block_store_name] = blocks

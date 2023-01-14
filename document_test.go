@@ -31,26 +31,26 @@ func (r *Role) GetName() string {
 func TestTemplate(t *testing.T) {
 	doc, err := buildTemplate("Hello world")
 	assert.Nil(t, err)
-	content, err := doc.Execute(nil)
+	content, err := doc.execute(nil)
 	assert.Nil(t, err)
 	assert.Equal(t, "Hello world", content)
 
 	doc, err = buildTemplate("Hello {{ name }}")
 	assert.Nil(t, err)
-	content, err = doc.Execute(Params{"name": "Jack"})
+	content, err = doc.execute(Params{"name": "Jack"})
 	assert.Nil(t, err)
 	assert.Equal(t, "Hello Jack", content)
 
 	person := &Person{name: "Jack", role: &Role{name: "Admin"}}
 	doc, err = buildTemplate("Hello {{ person.role.name }} {{ person.name }}")
 	assert.Nil(t, err)
-	content, err = doc.Execute(Params{"person": person})
+	content, err = doc.execute(Params{"person": person})
 	assert.Nil(t, err)
 	assert.Equal(t, "Hello Admin Jack", content)
 
 	doc, err = buildTemplate("Hello {{ person['role']['name'] }} {{ person['name'] }}")
 	assert.Nil(t, err)
-	content, err = doc.Execute(Params{"person": person})
+	content, err = doc.execute(Params{"person": person})
 	assert.Nil(t, err)
 	assert.Equal(t, "Hello Admin Jack", content)
 }
