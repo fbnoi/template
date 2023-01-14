@@ -3,7 +3,7 @@ package template
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"io/ioutil"
+	"os"
 )
 
 type sourceCode struct {
@@ -17,7 +17,7 @@ type textLine struct {
 	highlight bool
 }
 
-//Overview returns nearby code
+// Overview returns nearby code
 func (s *sourceCode) Overview(line int) (codes []*textLine) {
 	pos := reg_enter.FindAllStringIndex(s.code, -1)
 	len := len(pos)
@@ -45,12 +45,12 @@ func (s *sourceCode) Overview(line int) (codes []*textLine) {
 	return
 }
 
-func NewSourceCode(code string) *sourceCode {
+func newSourceCode(code string) *sourceCode {
 	return &sourceCode{code: code, identity: abstract([]byte(code))}
 }
 
-func NewSourceCodeFile(path string) (*sourceCode, error) {
-	bs, err := ioutil.ReadFile(path)
+func newSourceCodeFile(path string) (*sourceCode, error) {
+	bs, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

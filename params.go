@@ -7,15 +7,6 @@ var (
 
 type Params map[string]any
 
-func cop(p Params) Params {
-	np := make(Params)
-	for k, v := range p {
-		np[k] = v
-	}
-
-	return np
-}
-
 func (p Params) getBlock(name string) *BlockDirect {
 	if _blocks, ok := p[block_store_name]; ok {
 		_blocksMap := _blocks.(map[string]*BlockDirect)
@@ -43,4 +34,13 @@ func (p Params) setBlock(name string, block *BlockDirect) {
 
 func (p Params) setBlockRemains(remains string) {
 	p[block_remains_name] = remains
+}
+
+func cop(p Params) Params {
+	np := make(Params)
+	for k, v := range p {
+		np[k] = v
+	}
+
+	return np
 }

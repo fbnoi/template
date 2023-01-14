@@ -46,10 +46,10 @@ var (
 	reg_string = regexp.MustCompile(`^"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"|^'([^\'\\\\]*(?:\\\\.[^\'\\\\]*)*)'`)
 )
 
-func Tokenize(source *sourceCode) (*TokenStream, error) {
+func tokenize(source *sourceCode) (*tokenStream, error) {
 	var (
 		code            = reg_enter.ReplaceAllString(source.code, "\n")
-		stream          = &TokenStream{Source: source, current: -1}
+		stream          = &tokenStream{source: source, cursor: -1}
 		poss            = reg_token_start.FindAllStringIndex(code, -1)
 		cursor          = 0
 		line            = 0
@@ -225,17 +225,17 @@ func (b *Bracket) String() string {
 	return fmt.Sprintf("%s at line %d", b.ch, b.Line)
 }
 
-type TokenStream struct {
-	Source  *sourceCode
-	tokens  []*token
-	current int
+type tokenStream struct {
+	source *sourceCode
+	tokens []*token
+	cursor int
 }
 
-func (ts *TokenStream) Size() int {
+func (ts *tokenStream) size() int {
 	return len(ts.tokens)
 }
 
-func (ts *TokenStream) String() string {
+func (ts *tokenStream) string() string {
 	sb := &strings.Builder{}
 	for _, t := range ts.tokens {
 		sb.WriteString(t.string())
@@ -244,44 +244,75 @@ func (ts *TokenStream) String() string {
 	return sb.String()
 }
 
-func (ts *TokenStream) Current() (*token, error) {
-	if ts.current >= len(ts.tokens) {
+func (ts *tokenStream) current() (*token, error) {
+	if ts.cursor >= len(ts.tokens) {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
-	return ts.tokens[ts.current], nil
+	return ts.tokens[ts.cursor], nil
 }
 
-func (ts *TokenStream) HasNext() bool {
+func (ts *tokenStream) hasNext() bool {
 	size := len(ts.tokens)
 
-	return ts.current < size-1
+	return ts.cursor < size-1
 }
 
-func (ts *TokenStream) Next() (*token, error) {
-	ts.current++
-	if ts.current > len(ts.tokens)-1 {
+func (ts *tokenStream) next() (*token, error) {
+	ts.cursor++
+	if ts.cursor > len(ts.tokens)-1 {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
-	return ts.tokens[ts.current], nil
+	return ts.tokens[ts.cursor], nil
 }
 
-func (ts *TokenStream) Skip(n int) (*token, error) {
-	ts.current += n
-	if ts.current >= len(ts.tokens) {
+func (ts *tokenStream) skip(n int) (*token, error) {
+	ts.cursor += n
+	if ts.cursor >= len(ts.tokens) {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
-	return ts.tokens[ts.current], nil
+	return ts.tokens[ts.cursor], nil
 }
 
-func (ts *TokenStream) Peek(n int) (*token, error) {
-	if ts.current+n >= len(ts.tokens)-1 {
+func (ts *tokenStream) peek(n int) (*token, error) {
+	if ts.cursor+n >= len(ts.tokens)-1 {
 		return nil, &UnexpectedEndOfFile{}
 	}
 
-	return ts.tokens[ts.current+n], nil
+	return ts.tokens[ts.cursor+n], nil
+}
+
+func subStreamIf(ts *tokenStream, fn func(tok *token) bool) (*tokenStream, error) {
+	if _, err := ts.skip(1); err != nil {
+		return nil, err
+	}
+	start := ts.cursor
+	var (
+		tok *token
+		err error
+	)
+	for ts.hasNext() {
+		if tok, err = ts.next(); err != nil {
+			return nil, err
+		} else if !fn(tok) {
+			break
+		}
+	}
+	if start == ts.cursor {
+		if tok, err = ts.current(); err != nil {
+			return nil, err
+		} else {
+			return nil, newUnexpectedToken(tok)
+		}
+	}
+	le := ts.cursor - start
+	var tokens = make([]*token, le+1)
+	copy(tokens, ts.tokens[start:ts.cursor])
+	tokens[le] = newToken(type_eof, "", ts.tokens[ts.cursor-1].line)
+
+	return &tokenStream{source: ts.source, tokens: tokens, cursor: -1}, nil
 }
 
 func isWordOperator(word string) bool {

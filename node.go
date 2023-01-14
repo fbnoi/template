@@ -89,7 +89,6 @@ type (
 
 // exprNode() ensures that only expression/type nodes can be
 // assigned to an Expr.
-//
 func (*Ident) exprNode()      {}
 func (*BasicLit) exprNode()   {}
 func (*ListExpr) exprNode()   {}
@@ -214,7 +213,6 @@ func (*Document) Type() string {
 
 // Append() ensures that only statement nodes can be
 // assigned to a Direct.
-//
 func (s *IfDirect) Append(x Direct) {
 	if s.Else != nil {
 		if _, ok := s.Else.(*SectionDirect); ok {
