@@ -88,9 +88,7 @@ func (e *indexExpr) execute(p Params) (reflect.Value, error) {
 }
 
 func (e *callExpr) execute(p Params) (reflect.Value, error) {
-	if fn, err := method(reflect.ValueOf(p), e.fn.name.value); err != nil {
-		return zeroValue, err
-	} else {
+	if fn, ok := func_map[e.fn.name.value]; ok {
 		argv := []reflect.Value{}
 		for _, v := range e.args.list {
 			if arg, err := v.execute(p); err == nil {
@@ -99,9 +97,10 @@ func (e *callExpr) execute(p Params) (reflect.Value, error) {
 				return zeroValue, err
 			}
 		}
-
 		return call(fn, argv...)
 	}
+
+	return zeroValue, errors.Errorf("func named %s doesn't exist", e.fn.name.value)
 }
 
 func (e *binaryExpr) execute(p Params) (reflect.Value, error) {

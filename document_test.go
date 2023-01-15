@@ -36,6 +36,7 @@ func TestTemplate(t *testing.T) {
 	testDiv(t)
 	testIf(t)
 	testFor(t)
+	testFunc(t)
 }
 
 func testStringTpl(t *testing.T) {
@@ -147,4 +148,17 @@ func testFor(t *testing.T) {
 	content, err = tpl.execute(Params{"arr": []int{1, 2, 4}})
 	assert.Nil(t, err)
 	assert.Equal(t, "124", content)
+}
+
+func testFunc(t *testing.T) {
+	greeting := func(name string) string {
+		return "Hello " + name
+	}
+	err := RegisterFunc("greeting", greeting)
+	assert.Nil(t, err)
+	tpl, err := buildTemplate(`{{ greeting(name) }}`)
+	assert.Nil(t, err)
+	content, err := tpl.execute(Params{"name": "John"})
+	assert.Nil(t, err)
+	assert.Equal(t, "Hello John", content)
 }

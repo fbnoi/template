@@ -24,6 +24,7 @@ var (
 
 // ----------------------------------------------------------------------------
 // ExprNode validation
+
 func (e *ident) validate() error {
 	if !goodName(e.name.value) {
 		return newUnexpectedToken(e.name)
