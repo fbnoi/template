@@ -42,53 +42,36 @@ var (
 )
 
 func buildTemplate(content string) (*Document, error) {
-	var (
-		source *sourceCode
-		err    error
-	)
-	source = newSourceCode(content)
-	if err != nil {
-		return nil, err
-	}
+	source := newSourceCode(content)
 
 	return buildSource(source)
 }
 
 func buildFileTemplate(path string) (doc *Document, err error) {
-	if doc = _cache.doc(path); doc != nil {
-		return
-	}
 	var source *sourceCode
 	source, err = newSourceCodeFile(path)
 	if err != nil {
 		return nil, err
 	}
-
 	doc, err = buildSource(source)
-	if err != nil {
-		return
-	}
-	_cache.addDoc(path, doc)
 
 	return
 }
 
 func buildSource(source *sourceCode) (*Document, error) {
-	var (
-		stream *tokenStream
-		err    error
-	)
-	if err != nil {
-		return nil, err
+	if doc := _cache.doc(source.identity); doc != nil {
+		return doc, nil
 	}
-	stream, err = tokenize(source)
-	if err != nil {
-		return nil, err
-	}
-	doc := newDocument()
-	err = build(doc, stream)
 
-	return doc, err
+	if stream, err := tokenize(source); err != nil {
+		return nil, err
+	} else {
+		doc := newDocument()
+		err = build(doc, stream)
+		_cache.addDoc(source.identity, doc)
+
+		return doc, err
+	}
 }
 
 func build(doc *Document, stream *tokenStream) error {
@@ -428,7 +411,7 @@ func (esb *exprSandbox) build(stream *tokenStream) error {
 			return err
 		}
 		switch tok.typ {
-		case type_number, type_string:
+		case type_number, type_string, type_bool:
 			b := &basicLit{kind: tok.typ, value: tok}
 			esb.exprsStack = append(esb.exprsStack, b)
 

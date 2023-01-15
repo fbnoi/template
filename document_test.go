@@ -36,7 +36,9 @@ func TestTemplate(t *testing.T) {
 	testDiv(t)
 	testIf(t)
 	testFor(t)
+	testSet(t)
 	testFunc(t)
+	testCache(t)
 }
 
 func testStringTpl(t *testing.T) {
@@ -150,6 +152,14 @@ func testFor(t *testing.T) {
 	assert.Equal(t, "124", content)
 }
 
+func testSet(t *testing.T) {
+	tpl, err := buildTemplate(`{% set a = true %}{{ a }}`)
+	assert.Nil(t, err)
+	content, err := tpl.execute(nil)
+	assert.Nil(t, err)
+	assert.Equal(t, "true", content)
+}
+
 func testFunc(t *testing.T) {
 	greeting := func(name string) string {
 		return "Hello " + name
@@ -161,4 +171,11 @@ func testFunc(t *testing.T) {
 	content, err := tpl.execute(Params{"name": "John"})
 	assert.Nil(t, err)
 	assert.Equal(t, "Hello John", content)
+}
+
+func testCache(t *testing.T) {
+	_, err := buildTemplate(`cache`)
+	assert.Nil(t, err)
+	_, ok := _cache.cache[abstract([]byte("cache"))]
+	assert.Equal(t, true, ok)
 }

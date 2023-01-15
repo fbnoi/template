@@ -15,6 +15,7 @@ var (
 	tag_escape_variable = [...]string{`@{{`, `}}`}
 
 	word_operators = [...]string{"and", "or", "in"}
+	booleans       = [...]string{"true", "false"}
 )
 
 var (
@@ -159,8 +160,13 @@ func tokenize(source *sourceCode) (*tokenStream, error) {
 					tok = newToken(type_operator, word, line)
 					stream.tokens = append(stream.tokens, tok)
 					continue
+				} else if isBooleans(word) {
+					tok = newToken(type_bool, word, line)
+					stream.tokens = append(stream.tokens, tok)
+					continue
 				}
-				stream.tokens = append(stream.tokens, newToken(type_name, word, line))
+				tok = newToken(type_name, word, line)
+				stream.tokens = append(stream.tokens, tok)
 			} else if sPos = reg_number.FindStringIndex(code[cursor:end]); sPos != nil {
 				tok = newToken(type_number, code[cursor:cursor+sPos[1]], line)
 				stream.tokens = append(stream.tokens, tok)
@@ -321,6 +327,16 @@ func subStreamIf(ts *tokenStream, fn func(tok *token) bool) (*tokenStream, error
 
 func isWordOperator(word string) bool {
 	for _, v := range word_operators {
+		if v == word {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isBooleans(word string) bool {
+	for _, v := range booleans {
 		if v == word {
 			return true
 		}

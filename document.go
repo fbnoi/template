@@ -29,7 +29,6 @@ func (docs *documents) addDoc(name string, doc *Document) error {
 	if _, ok := docs.cache[name]; ok {
 		return errors.Errorf("document with name [%s] has already exists.", name)
 	}
-
 	docs.cache[name] = doc
 
 	return nil
@@ -63,6 +62,9 @@ func (doc *Document) Block(name string) *blockDirect {
 }
 
 func (doc *Document) execute(p Params) (string, error) {
+	if p == nil {
+		p = make(Params)
+	}
 	sb := &strings.Builder{}
 	nd := doc
 	if doc.extend != nil {

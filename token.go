@@ -8,6 +8,7 @@ const (
 	type_var_end
 	type_name
 	type_number
+	type_bool
 	type_string
 	type_operator
 	type_punctuation

@@ -14,15 +14,21 @@ func (e *ident) execute(p Params) (reflect.Value, error) {
 
 func (e *basicLit) execute(Params) (reflect.Value, error) {
 	vs := e.value.value
-	if e.kind == type_string {
-		return reflect.ValueOf(vs), nil
-	}
-	if e.kind == type_number {
+	switch e.kind {
+	case type_number:
 		if i, err := strconv.Atoi(vs); err == nil {
 			return reflect.ValueOf(i), nil
 		}
 		if f, err := strconv.ParseFloat(vs, 64); err == nil {
 			return reflect.ValueOf(f), nil
+		}
+
+	case type_string:
+		return reflect.ValueOf(vs), nil
+
+	case type_bool:
+		if i, err := strconv.ParseBool(vs); err == nil {
+			return reflect.ValueOf(i), nil
 		}
 	}
 
@@ -88,7 +94,7 @@ func (e *indexExpr) execute(p Params) (reflect.Value, error) {
 }
 
 func (e *callExpr) execute(p Params) (reflect.Value, error) {
-	if fn, ok := func_map[e.fn.name.value]; ok {
+	if fn := getFunc(e.fn.name.value); fn != zeroValue {
 		argv := []reflect.Value{}
 		for _, v := range e.args.list {
 			if arg, err := v.execute(p); err == nil {
@@ -171,7 +177,7 @@ func (d *assignDirect) execute(p Params) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	p[d.lh.name.value] = yx
+	p[d.lh.name.value] = yx.Interface()
 
 	return "", nil
 }
