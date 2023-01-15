@@ -140,6 +140,8 @@ func (e *binaryExpr) execute(p Params) (reflect.Value, error) {
 		return eq(x, y)
 	case "!=":
 		return neq(x, y)
+	case "|":
+
 	}
 
 	return zeroValue, newUnexpectedToken(e.op)

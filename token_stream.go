@@ -31,8 +31,8 @@ var (
 	reg_enter = regexp.MustCompile(`(\r\n|\n)`)
 	// whitespace
 	reg_whitespace = regexp.MustCompile(`^\s+`)
-	// . + - * / > < = !
-	reg_operator = regexp.MustCompile(`^[\!\.\+\-*\/><=]{1,3}`)
+	// . + - * / > < = ! |
+	reg_operator = regexp.MustCompile(`^[\!\.\+\-*\/><=\|]{1,3}`)
 	// bracket [ ] ( ) {}
 	reg_bracket       = regexp.MustCompile(`^[\[\]\(\)\{\}]`)
 	reg_bracket_open  = regexp.MustCompile(`^[\[\(\{]$`)

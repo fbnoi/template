@@ -11,6 +11,7 @@ import (
 var (
 	rank = map[string]int{
 		".":   1,
+		"|":   2,
 		"*":   3,
 		"/":   3,
 		"+":   4,
@@ -529,7 +530,7 @@ func (esb *exprSandbox) mergeExprsStack(tok *token) error {
 	}
 	var expr1, expr2 = esb.exprsStack[len(esb.exprsStack)-1], esb.exprsStack[len(esb.exprsStack)-2]
 	switch tok.value {
-	case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or":
+	case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or", "|":
 		esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
 		esb.exprsStack = append(esb.exprsStack, &binaryExpr{x: expr2, op: tok, y: expr1})
 
