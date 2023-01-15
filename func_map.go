@@ -9,7 +9,7 @@ import (
 
 var (
 	func_map = &funcMap{
-		store:  make(map[string]reflect.Value),
+		store:  buildInFuncs(),
 		locker: &sync.RWMutex{},
 	}
 )
