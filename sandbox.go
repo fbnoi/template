@@ -157,9 +157,6 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 		}
 
 		switch tok.typ {
-		case type_eof:
-			return nil
-
 		case type_text:
 			node = &textDirect{text: &basicLit{kind: type_string, value: tok}}
 			sb.cursor.append(node)
@@ -337,12 +334,12 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 				}
 				node = &forDirect{}
 				switch subStream.size() {
-				case 2:
+				case 1:
 					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
 					node.(*forDirect).value = &ident{name: tok}
-				case 4:
+				case 3:
 					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
@@ -516,7 +513,6 @@ func (esb *exprSandbox) build(stream *tokenStream) error {
 				return newUnexpectedToken(tok)
 
 			}
-		case type_eof:
 		default:
 			return newUnexpectedToken(tok)
 		}

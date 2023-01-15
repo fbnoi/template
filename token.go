@@ -1,8 +1,7 @@
 package template
 
 const (
-	type_eof = iota - 1
-	type_text
+	type_text = iota
 	type_command_start
 	type_var_start
 	type_command_end

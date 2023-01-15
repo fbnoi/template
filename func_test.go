@@ -8,10 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParam(t *testing.T) {
-
-}
-
 type Foo struct {
 	foo string
 	Bar string
@@ -47,7 +43,7 @@ func TestIndex(t *testing.T) {
 	_, err = index(reflect.ValueOf(intSlice), reflect.ValueOf(1))
 	assert.EqualError(t, err, "out of boundary, got 1")
 	_, err = index(reflect.ValueOf(intSlice), reflect.ValueOf("1"))
-	assert.EqualError(t, err, "con't use type string as array or slice index")
+	assert.EqualError(t, err, "con't use type string as array/slice/string index")
 
 	strSlice := []string{"string"}
 	val, err = index(reflect.ValueOf(strSlice), reflect.ValueOf(0))
@@ -72,7 +68,7 @@ func TestIndex(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, val.Interface(), 1)
 	_, err = index(intMapVal, reflect.ValueOf("Bar"))
-	assert.ErrorContains(t, err, "index Bar don't exist in map")
+	assert.ErrorContains(t, err, "index Bar doesn't exist in map")
 	_, err = index(intMapVal, reflect.ValueOf(1))
 	assert.EqualError(t, err, "con't use type int as map[string] key")
 
@@ -82,7 +78,7 @@ func TestIndex(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, val.Interface(), "Foo")
 	_, err = index(intMapVal, reflect.ValueOf("Bar"))
-	assert.ErrorContains(t, err, "index Bar don't exist in map")
+	assert.ErrorContains(t, err, "index Bar doesn't exist in map")
 	_, err = index(intMapVal, reflect.ValueOf(1))
 	assert.EqualError(t, err, "con't use type int as map[string] key")
 
@@ -94,7 +90,7 @@ func TestIndex(t *testing.T) {
 	assert.Equal(t, ok, true)
 	assert.Equal(t, valObj, foo)
 	_, err = index(intMapVal, reflect.ValueOf("Bar"))
-	assert.ErrorContains(t, err, "index Bar don't exist in map")
+	assert.ErrorContains(t, err, "index Bar doesn't exist in map")
 	_, err = index(intMapVal, reflect.ValueOf(1))
 	assert.EqualError(t, err, "con't use type int as map[string] key")
 }
@@ -271,7 +267,7 @@ func TestGet(t *testing.T) {
 	assert.Equal(t, val.Interface(), 1)
 
 	_, err = get(bar, "Bar", "4")
-	assert.ErrorContains(t, err, "index 4 don't exist in map")
+	assert.ErrorContains(t, err, "index 4 doesn't exist in map")
 
 	_, err = get(bar, "Bars")
 	assert.NotNil(t, err)
