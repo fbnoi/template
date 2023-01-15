@@ -35,6 +35,7 @@ func TestTemplate(t *testing.T) {
 	testMulti(t)
 	testDiv(t)
 	testIf(t)
+	testFor(t)
 }
 
 func testStringTpl(t *testing.T) {
@@ -128,7 +129,22 @@ func testIf(t *testing.T) {
 	assert.Equal(t, "a and b are false", content)
 }
 
-// func testFor(t *testing.T) {
-// 	var is []int
-// 	tpl, err := buildTemplate(`{% for k, v in arr %}{% endfor %}`)
-// }
+func testFor(t *testing.T) {
+	tpl, err := buildTemplate(`{% for k, v in arr %}{{ k }}{{ v }}{% endfor %}`)
+	assert.Nil(t, err)
+	content, err := tpl.execute(Params{"arr": []int{1, 2, 4}})
+	assert.Nil(t, err)
+	assert.Equal(t, "011224", content)
+
+	tpl, err = buildTemplate(`{% for _, v in arr %}{{ v }}{% endfor %}`)
+	assert.Nil(t, err)
+	content, err = tpl.execute(Params{"arr": []int{1, 2, 4}})
+	assert.Nil(t, err)
+	assert.Equal(t, "124", content)
+
+	tpl, err = buildTemplate(`{% for v in arr %}{{ v }}{% endfor %}`)
+	assert.Nil(t, err)
+	content, err = tpl.execute(Params{"arr": []int{1, 2, 4}})
+	assert.Nil(t, err)
+	assert.Equal(t, "124", content)
+}

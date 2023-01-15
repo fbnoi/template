@@ -346,7 +346,9 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err
 					}
-					node.(*forDirect).key = &ident{name: tok}
+					if tok.value != "_" {
+						node.(*forDirect).key = &ident{name: tok}
+					}
 					subStream.skip(1)
 					if tok, err = nextTokenTypeShouldBe(subStream, type_name); err != nil {
 						return err

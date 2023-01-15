@@ -238,9 +238,9 @@ func (d *forDirect) execute(p Params) (string, error) {
 		iter := v.MapRange()
 		for iter.Next() {
 			if d.key != nil {
-				np[d.key.name.value] = iter.Key()
+				np[d.key.name.value] = iter.Key().Interface()
 			}
-			np[d.key.name.value] = iter.Value()
+			np[d.value.name.value] = iter.Value().Interface()
 			if str, err = d.body.execute(np); err != nil {
 				return "", err
 			} else {
@@ -253,7 +253,7 @@ func (d *forDirect) execute(p Params) (string, error) {
 			if d.key != nil {
 				np[d.key.name.value] = i
 			}
-			np[d.key.name.value] = v.Index(i)
+			np[d.value.name.value] = v.Index(i).Interface()
 			if str, err = d.body.execute(np); err != nil {
 				return "", err
 			} else {
