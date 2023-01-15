@@ -447,25 +447,12 @@ func (esb *exprSandbox) build(stream *tokenStream) error {
 
 		case type_operator:
 			switch tok.value {
-			case ")":
-				for {
-					topOp = esb.opsStack[len(esb.opsStack)-1]
-					esb.opsStack = esb.opsStack[:len(esb.opsStack)-1]
-					if topOp.value != "(" {
-						esb.mergeExprsStack(topOp)
-						continue
-					}
-					if topOp.value == "(" || len(esb.opsStack) == 0 {
-						break
-					}
-				}
-
-			case "]":
+			case ")", "]":
 				for {
 					topOp = esb.opsStack[len(esb.opsStack)-1]
 					esb.opsStack = esb.opsStack[:len(esb.opsStack)-1]
 					esb.mergeExprsStack(topOp)
-					if topOp.value == "[" || len(esb.opsStack) == 0 {
+					if topOp.value == "(" || topOp.value == "[" || len(esb.opsStack) == 0 {
 						break
 					}
 				}
@@ -521,7 +508,7 @@ func (esb *exprSandbox) build(stream *tokenStream) error {
 					}
 					topOp = esb.opsStack[len(esb.opsStack)-1]
 				}
-				esb.mergeExprsStack(tok)
+				esb.opsStack = append(esb.opsStack, tok)
 
 			default:
 				return newUnexpectedToken(tok)
@@ -573,35 +560,31 @@ func (esb *exprSandbox) mergeExprsStack(tok *token) error {
 		esb.exprsStack = append(esb.exprsStack, &indexExpr{x: expr2, op: tok, index: expr1})
 
 	case ",":
-		if lExpr, ok := expr2.(*listExpr); ok {
-			lExpr.list = append(lExpr.list, expr1)
-			esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-1]
+		var (
+			lExpr *listExpr
+			ok    bool
+		)
+		if lExpr, ok = expr1.(*listExpr); ok {
+			lExpr.list = append([]expr{expr2}, lExpr.list...)
 		} else {
-			lExpr := &listExpr{}
+			lExpr = &listExpr{}
 			lExpr.list = append(lExpr.list, expr1)
-			esb.exprsStack[len(esb.exprsStack)-1] = lExpr
+			lExpr.list = append([]expr{expr2}, lExpr.list...)
 		}
+		esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
+		esb.exprsStack = append(esb.exprsStack, lExpr)
 
-	case ")":
-		if lExpr, ok := expr2.(*listExpr); ok {
-			if len(esb.exprsStack) < 3 {
-				return errors.Errorf("Unexpected arg list %s", lExpr.literal())
-			}
-			lExpr.list = append(lExpr.list, expr1)
-			expr3 := esb.exprsStack[len(esb.exprsStack)-3]
-			if fnExpr, ok := expr3.(*callExpr); !ok {
-				return errors.Errorf("Unexpected tokens %s", expr3.literal())
+	case "(":
+		if fnExpr, ok := expr2.(*callExpr); ok {
+			if lExpr, ok := expr1.(*listExpr); ok {
+				fnExpr.args = lExpr
+
 			} else {
+				lExpr = &listExpr{}
+				lExpr.list = append(lExpr.list, expr1)
 				fnExpr.args = lExpr
 			}
-			esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
-		} else if fnExpr, ok := expr2.(*callExpr); ok {
-			lExpr := &listExpr{}
-			lExpr.list = append(lExpr.list, expr1)
-			fnExpr.args = lExpr
 			esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-1]
-		} else {
-			return errors.Errorf("Unexpected tokens %s", expr2.literal())
 		}
 
 	default:

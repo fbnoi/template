@@ -195,15 +195,28 @@ func (d *ifDirect) execute(p Params) (string, error) {
 		return "", err
 	} else {
 		conv = uncoverInterface(conv)
-		if conv.IsNil() || conv.IsZero() {
-			if d.el != nil {
-				return d.el.execute(p)
-			}
-
-			return "", nil
-		} else {
-			return d.body.execute(p)
+		var truth bool
+		switch conv.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64, reflect.String:
+			truth = !conv.IsZero()
+		case reflect.Bool:
+			truth = conv.Bool()
+		case reflect.Pointer:
+			truth = !conv.IsNil()
+		case reflect.Map, reflect.Array, reflect.Slice:
+			truth = conv.Len() != 0
+		default:
+			return "", errors.Errorf("can't use %s as condition expression", conv.Kind())
 		}
+		if truth {
+			return d.body.execute(p)
+		} else if d.el != nil {
+			return d.el.execute(p)
+		}
+
+		return "", nil
 	}
 }
 

@@ -194,11 +194,12 @@ func (s *ifDirect) append(x direct) {
 		if _, ok := s.el.(*sectionDirect); ok {
 			s.el.(*sectionDirect).list = append(s.el.(*sectionDirect).list, x)
 		}
+	} else {
+		if s.body == nil {
+			s.body = &sectionDirect{}
+		}
+		s.body.list = append(s.body.list, x)
 	}
-	if s.body == nil {
-		s.body = &sectionDirect{}
-	}
-	s.body.list = append(s.body.list, x)
 }
 
 func (s *forDirect) append(x direct) {
