@@ -28,17 +28,18 @@ func (r *Role) GetName() string {
 }
 
 func TestTemplate(t *testing.T) {
-	// testStringTpl(t)
-	// testVariableTpl(t)
-	// testVStructPropertyTpl(t)
-	// testAdd(t)
-	// testMulti(t)
-	// testDiv(t)
-	// testIf(t)
-	// testFor(t)
-	// testSet(t)
-	// testFunc(t)
-	// testCache(t)
+	testStringTpl(t)
+	testVariableTpl(t)
+	testVStructPropertyTpl(t)
+	testAdd(t)
+	testMulti(t)
+	testDiv(t)
+	testPipeline(t)
+	testIf(t)
+	testFor(t)
+	testSet(t)
+	testFunc(t)
+	testCache(t)
 	testFileTpl(t)
 }
 
@@ -94,6 +95,24 @@ func testDiv(t *testing.T) {
 	assert.Equal(t, "2", content)
 	_, err = tpl.execute(Params{"a": 2, "b": 0})
 	assert.ErrorContains(t, err, "can't use 0 as denominator")
+}
+
+func testPipeline(t *testing.T) {
+	tpl, err := buildTemplate("{{ a|length }}")
+	assert.Nil(t, err)
+	content, err := tpl.execute(Params{"a": []int{1, 2}})
+	assert.Nil(t, err)
+	assert.Equal(t, "2", content)
+
+	err = RegisterFilter("func1", func(a, b int) int {
+		return a + b
+	})
+	assert.Nil(t, err)
+	tpl, err = buildTemplate("{{ a|func1(b)|func1(b)|func1(b) }}")
+	assert.Nil(t, err)
+	content, err = tpl.execute(Params{"a": 1, "b": 2})
+	assert.Nil(t, err)
+	assert.Equal(t, "7", content)
 }
 
 func testIf(t *testing.T) {

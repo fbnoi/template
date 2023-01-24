@@ -199,6 +199,7 @@ func (e *pipelineExpr) execute(p Params) (reflect.Value, error) {
 			}
 
 		case *callExpr:
+			filter = getFilter(y.fn.name.value)
 			for _, v := range y.args.list {
 				if arg, err := v.execute(p); err == nil {
 					argv = append(argv, arg)
