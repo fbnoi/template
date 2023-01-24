@@ -190,7 +190,7 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 					return err
 				}
 				node.(*extendDirect).path = &basicLit{kind: tok.typ, value: tok}
-				if baseDoc, err := buildFileTemplate(tok.value); err != nil {
+				if baseDoc, err := buildFileTemplate(trimString(tok.value)); err != nil {
 					return err
 				} else {
 					baseDoc.extended = true
@@ -204,7 +204,7 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 					return err
 				}
 				node.(*includeDirect).path = &basicLit{kind: tok.typ, value: tok}
-				if baseDoc, err = buildFileTemplate(tok.value); err != nil {
+				if baseDoc, err = buildFileTemplate(trimString(tok.value)); err != nil {
 					return err
 				} else {
 					node.(*includeDirect).doc = baseDoc

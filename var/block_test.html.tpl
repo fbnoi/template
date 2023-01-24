@@ -1,20 +1,24 @@
-{% extend "../var/template/base.html.tpl" %}
+{% extend "./var/base.html.tpl" %}
 {% block content %}
-<div>
+    {{ __parent__ }}
     {% if show_content1 %}
-        {{ show_content1 }}
+        {{ content1 }}
     {% endif %}
 
     {% if show_content2 %}
         {{ content2 }}
     {% else %}
-        <span>not show content2</span>
+        not show content2
+    {% endif %}
+
+    {% if show_content3 %}
+        {{ content3 }}
+    {% elseif show_content4 %}
+        {{ content4 }}
     {% endif %}
 
     {% for k, v in list %}
-        {{ k }} : {{ v }}
+        {{ k }}:{{ v }}
     {% endfor %}
-</div>
-<hr>
-{% include "../var/template/include_test.html.tpl" with PS(P("id", person)) %}
+{% include "./var/include_test.html.tpl" with PS(P("content4", content4)) only %}
 {% endblock %}

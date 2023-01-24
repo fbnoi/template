@@ -39,6 +39,7 @@ func TestTemplate(t *testing.T) {
 	testSet(t)
 	testFunc(t)
 	testCache(t)
+	testFileTpl(t)
 }
 
 func testStringTpl(t *testing.T) {
@@ -178,4 +179,31 @@ func testCache(t *testing.T) {
 	assert.Nil(t, err)
 	_, ok := _cache.cache[abstract([]byte("cache"))]
 	assert.Equal(t, true, ok)
+}
+
+func testFileTpl(t *testing.T) {
+	tpl, err := buildFileTemplate("./var/block_test.html.tpl")
+	assert.Nil(t, err)
+	assert.NotNil(t, _cache.doc("./var/block_test.html.tpl"))
+	assert.NotNil(t, _cache.doc("./var/base.html.tpl"))
+	assert.NotNil(t, _cache.doc("./var/include_test.html.tpl"))
+	content, err := tpl.execute(Params{
+		"some_content":  "content in base tpl",
+		"show_content1": true, "content1": "show content1",
+		"show_content2": false, "content2": "show content2",
+		"show_content3": true, "content3": "show content3",
+		"show_content4": true, "content4": "show content4",
+		"list":         map[string]string{"key1": "value1", "key2": "value2"},
+		"content_with": "Hello include",
+	})
+	assert.Nil(t, err)
+	assert.Contains(t, content, "content in base tpl")
+	assert.Contains(t, content, "show content1")
+	assert.Contains(t, content, "show content3")
+	assert.Contains(t, content, "key1:value1")
+	assert.Contains(t, content, "key2:value2")
+	assert.Contains(t, content, "some text in block page")
+	assert.Contains(t, content, "some content in include tpl")
+	assert.Contains(t, content, "show content4")
+	assert.NotContains(t, content, "Hello include")
 }

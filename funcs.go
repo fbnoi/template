@@ -13,8 +13,8 @@ func buildInFuncs() map[string]reflect.Value {
 
 func PS(ps ...Params) Params {
 	p := Params{}
-	for _, p := range ps {
-		for k, v := range p {
+	for _, pr := range ps {
+		for k, v := range pr {
 			p[k] = v
 		}
 	}

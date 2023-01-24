@@ -1,16 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ name }}</title>
-</head>
-<body>
-    {% block page %}
-        <div><h3>title</h3></div>
-        {% block content %}
-        {% endblock %}
+this is a line of texts
+{{ some_content }}
+{% block page %}
+    some text in block page
+    {% block content %}
     {% endblock %}
-</body>
-</html>
+    some other text in block page
+{% endblock %}
+another line of texts

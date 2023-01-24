@@ -24,6 +24,8 @@ func (e *basicLit) execute(Params) (reflect.Value, error) {
 		}
 
 	case type_string:
+		vs = trimString(vs)
+
 		return reflect.ValueOf(vs), nil
 
 	case type_bool:
@@ -306,20 +308,21 @@ func (d *includeDirect) execute(p Params) (string, error) {
 			return "", err
 		}
 		if val.Type() != reflect.TypeOf(p) {
-			return "", errors.Errorf("con't use type %s as params", val.Type())
+			return "", errors.Errorf("can't use type %s as params", val.Type())
 		}
+		np := val.Interface().(Params)
 		if d.only {
-			return d.doc.body.execute(val.Interface().(Params))
+			return d.doc.execute(np)
 		}
-		np := cop(p)
+		np = cop(p)
 		for k, v := range val.Interface().(Params) {
 			np[k] = v
 		}
 
-		return d.doc.body.execute(np)
+		return d.doc.execute(np)
 	}
 
-	return d.doc.body.execute(p)
+	return d.doc.execute(p)
 }
 
 func (d *extendDirect) execute(p Params) (string, error) {
@@ -349,4 +352,12 @@ func strValue(v reflect.Value) (string, error) {
 	}
 
 	return "", errors.Errorf("can't convert type %s to string", v.Type())
+}
+
+func trimString(str string) string {
+	if str == "" {
+		return str
+	}
+
+	return strings.Trim(str, "\"'")
 }
