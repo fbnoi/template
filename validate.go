@@ -85,6 +85,14 @@ func (e *singleExpr) validate() error {
 	return e.x.validate()
 }
 
+func (e *pipelineExpr) validate() error {
+	if isType(e.x, listExprType) || (!isType(e.y, identType) && !isType(e.y, callExprType)) {
+		return exprValidateError(e)
+	}
+
+	return reportValidateError(e.x.validate, e.y.validate)
+}
+
 // ----------------------------------------------------------------------------
 // DirectNode
 

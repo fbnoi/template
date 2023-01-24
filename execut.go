@@ -142,8 +142,22 @@ func (e *binaryExpr) execute(p Params) (reflect.Value, error) {
 		return eq(x, y)
 	case "!=":
 		return neq(x, y)
-	case "|":
-
+	case "and":
+		if t1, err := boolValue(x); err != nil {
+			return zeroValue, err
+		} else if t2, err := boolValue(y); err != nil {
+			return zeroValue, err
+		} else {
+			return reflect.ValueOf(t1 && t2), nil
+		}
+	case "or":
+		if t1, err := boolValue(x); err != nil {
+			return zeroValue, err
+		} else if t2, err := boolValue(y); err != nil {
+			return zeroValue, err
+		} else {
+			return reflect.ValueOf(t1 || t2), nil
+		}
 	}
 
 	return zeroValue, newUnexpectedToken(e.op)
@@ -155,13 +169,48 @@ func (e *singleExpr) execute(p Params) (reflect.Value, error) {
 		return zeroValue, err
 	}
 	switch e.op.value {
+
 	case "not":
-		r := x.IsZero()
+		r, err := boolValue(x)
+		if err != nil {
+			return zeroValue, err
+		}
 
 		return reflect.ValueOf(!r), nil
+
 	}
 
 	return zeroValue, newUnexpectedToken(e.op)
+}
+
+func (e *pipelineExpr) execute(p Params) (reflect.Value, error) {
+	if x, err := e.x.execute(p); err != nil {
+		return zeroValue, err
+	} else {
+		var (
+			filter reflect.Value
+			argv   = []reflect.Value{x}
+		)
+		switch y := e.y.(type) {
+		case *ident:
+			filter = getFilter(y.name.value)
+			if filter == zeroValue {
+				return zeroValue, errors.Errorf("filter named %s doesn't exist", y.name.value)
+			}
+
+		case *callExpr:
+			for _, v := range y.args.list {
+				if arg, err := v.execute(p); err == nil {
+					argv = append(argv, arg)
+				} else {
+					return zeroValue, err
+				}
+			}
+
+		}
+
+		return call(filter, argv...)
+	}
 }
 
 func (d *textDirect) execute(p Params) (string, error) {
@@ -203,23 +252,9 @@ func (d *ifDirect) execute(p Params) (string, error) {
 	if conv, err := d.cond.execute(p); err != nil {
 		return "", err
 	} else {
-		conv = uncoverInterface(conv)
-		var truth bool
-		switch conv.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			reflect.Float32, reflect.Float64, reflect.String:
-			truth = !conv.IsZero()
-		case reflect.Bool:
-			truth = conv.Bool()
-		case reflect.Pointer:
-			truth = !conv.IsNil()
-		case reflect.Map, reflect.Array, reflect.Slice:
-			truth = conv.Len() != 0
-		default:
-			return "", errors.Errorf("can't use %s as condition expression", conv.Kind())
-		}
-		if truth {
+		if truth, err := boolValue(conv); err != nil {
+			return "", err
+		} else if truth {
 			return d.body.execute(p)
 		} else if d.el != nil {
 			return d.el.execute(p)
@@ -327,6 +362,33 @@ func (d *includeDirect) execute(p Params) (string, error) {
 
 func (d *extendDirect) execute(p Params) (string, error) {
 	panic("unreachable")
+}
+
+func boolValue(v reflect.Value) (bool, error) {
+	v = uncoverInterface(v)
+	var truth bool
+	switch v.Kind() {
+
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64, reflect.String:
+		truth = !v.IsZero()
+
+	case reflect.Bool:
+		truth = v.Bool()
+
+	case reflect.Pointer:
+		truth = !v.IsNil()
+
+	case reflect.Map, reflect.Array, reflect.Slice:
+		truth = v.Len() != 0
+
+	default:
+		return false, errors.Errorf("can't use %s as condition expression", v.Kind())
+
+	}
+
+	return truth, nil
 }
 
 func strValue(v reflect.Value) (string, error) {

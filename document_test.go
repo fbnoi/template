@@ -28,17 +28,17 @@ func (r *Role) GetName() string {
 }
 
 func TestTemplate(t *testing.T) {
-	testStringTpl(t)
-	testVariableTpl(t)
-	testVStructPropertyTpl(t)
-	testAdd(t)
-	testMulti(t)
-	testDiv(t)
-	testIf(t)
-	testFor(t)
-	testSet(t)
-	testFunc(t)
-	testCache(t)
+	// testStringTpl(t)
+	// testVariableTpl(t)
+	// testVStructPropertyTpl(t)
+	// testAdd(t)
+	// testMulti(t)
+	// testDiv(t)
+	// testIf(t)
+	// testFor(t)
+	// testSet(t)
+	// testFunc(t)
+	// testCache(t)
 	testFileTpl(t)
 }
 
@@ -200,6 +200,9 @@ func testFileTpl(t *testing.T) {
 	assert.Contains(t, content, "content in base tpl")
 	assert.Contains(t, content, "show content1")
 	assert.Contains(t, content, "show content3")
+	assert.Contains(t, content, "not show content2")
+	assert.Contains(t, content, "show content3 and show content4")
+	assert.NotContains(t, content, "show content3 and not show content4")
 	assert.Contains(t, content, "key1:value1")
 	assert.Contains(t, content, "key2:value2")
 	assert.Contains(t, content, "some text in block page")

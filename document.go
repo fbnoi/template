@@ -26,6 +26,7 @@ type documents struct {
 func (docs *documents) addDoc(name string, doc *Document) error {
 	docs.locker.Lock()
 	defer docs.locker.Unlock()
+
 	if _, ok := docs.cache[name]; ok {
 		return errors.Errorf("document with name [%s] has already exists.", name)
 	}

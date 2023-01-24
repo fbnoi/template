@@ -14,7 +14,7 @@ var (
 	tag_escape_block    = [...]string{`@{%`, `%}`}
 	tag_escape_variable = [...]string{`@{{`, `}}`}
 
-	word_operators = [...]string{"and", "or", "in"}
+	word_operators = [...]string{"and", "or", "not", "in"}
 	booleans       = [...]string{"true", "false"}
 )
 
@@ -84,7 +84,9 @@ func tokenize(source *sourceCode) (*tokenStream, error) {
 			moveCursor(pos[0])
 		}
 		var reg *regexp.Regexp
+
 		switch code[pos[0]:pos[1]] {
+
 		case tag_escape_comment[0]:
 			moveCursor(pos[0] + 1)
 			ends = reg_comment.FindStringIndex(code[cursor:])
@@ -94,6 +96,8 @@ func tokenize(source *sourceCode) (*tokenStream, error) {
 			tok = newToken(type_text, code[cursor:cursor+ends[1]], line)
 			stream.tokens = append(stream.tokens, tok)
 			moveCursor(cursor + ends[1])
+			continue
+
 		case tag_escape_block[0]:
 			moveCursor(pos[0] + 1)
 			ends = reg_block.FindStringIndex(code[cursor:])
@@ -103,6 +107,8 @@ func tokenize(source *sourceCode) (*tokenStream, error) {
 			tok = newToken(type_text, code[cursor:cursor+ends[1]], line)
 			stream.tokens = append(stream.tokens, tok)
 			moveCursor(cursor + ends[1])
+			continue
+
 		case tag_escape_variable[0]:
 			moveCursor(pos[0] + 1)
 			ends = reg_variable.FindStringIndex(code[cursor:])
@@ -112,6 +118,8 @@ func tokenize(source *sourceCode) (*tokenStream, error) {
 			tok = newToken(type_text, code[cursor:cursor+ends[1]], line)
 			stream.tokens = append(stream.tokens, tok)
 			moveCursor(cursor + ends[1])
+			continue
+
 		case tag_comment[0]:
 			ends = reg_comment.FindStringIndex(code[cursor:])
 			if ends == nil {
@@ -120,6 +128,8 @@ func tokenize(source *sourceCode) (*tokenStream, error) {
 			tok = newToken(type_text, code[cursor:cursor+ends[1]], line)
 			stream.tokens = append(stream.tokens, tok)
 			moveCursor(cursor + ends[1])
+			continue
+
 		case tag_block[0]:
 			reg = reg_block
 
@@ -128,6 +138,7 @@ func tokenize(source *sourceCode) (*tokenStream, error) {
 
 		default:
 			return nil, &UnexpectedToken{Line: line, token: code[pos[0]:pos[1]]}
+
 		}
 
 		if reg == reg_block {

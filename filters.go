@@ -8,7 +8,6 @@ import (
 
 var filters = map[string]reflect.Value{
 	"length": reflect.ValueOf(length),
-	"P":      reflect.ValueOf(P),
 }
 
 func buildInFilters() map[string]reflect.Value {

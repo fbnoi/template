@@ -60,29 +60,76 @@ type (
 		args *listExpr // function arguments; or nil
 	}
 
-	// A binaryExpr node represents a binary expression.
+	// A binaryExpr node represents a binary expression, such as
+	// +, -, *, / etc,.
 	binaryExpr struct {
 		x  expr   // left operand; not nil
 		op *token // operator; not nil
 		y  expr   // right operand; not nil
 	}
 
-	// A Single node represents a single expression.
+	// A singleExpr node represents a single expression.
 	singleExpr struct {
 		x  expr   // expr; not nil
 		op *token // operator; not nil
+	}
+
+	// A pipelineExpr node represents a pipeline expression, such as X|pipeline
+	pipelineExpr struct {
+		x expr
+		y expr
 	}
 )
 
 // exprNode() ensures that only expression/type nodes can be
 // assigned to an Expr.
-func (*ident) exprNode()      {}
-func (*basicLit) exprNode()   {}
-func (*listExpr) exprNode()   {}
-func (*indexExpr) exprNode()  {}
-func (*callExpr) exprNode()   {}
-func (*binaryExpr) exprNode() {}
-func (*singleExpr) exprNode() {}
+func (*ident) exprNode()        {}
+func (*basicLit) exprNode()     {}
+func (*listExpr) exprNode()     {}
+func (*indexExpr) exprNode()    {}
+func (*callExpr) exprNode()     {}
+func (*binaryExpr) exprNode()   {}
+func (*singleExpr) exprNode()   {}
+func (*pipelineExpr) exprNode() {}
+
+func (e *ident) literal() string {
+	return e.name.value
+}
+func (e *basicLit) literal() string {
+	return e.value.value
+}
+func (e *listExpr) literal() string {
+	var ts []string
+	for _, v := range e.list {
+		ts = append(ts, v.literal())
+	}
+
+	return strings.Join(ts, ",")
+}
+func (e *indexExpr) literal() string {
+
+	if e.op.value == "." {
+		return fmt.Sprintf("%s.%s", e.x.literal(), e.index.literal())
+	}
+
+	if e.op.value == "[" {
+		return fmt.Sprintf("%s[%s]", e.x.literal(), e.index.literal())
+	}
+
+	return "<indexExpr ParseError>"
+}
+func (e *callExpr) literal() string {
+	return fmt.Sprintf("%s(%s)", e.fn.literal(), e.args.literal())
+}
+func (e *binaryExpr) literal() string {
+	return fmt.Sprintf("%s %s %s", e.x.literal(), e.op.value, e.y.literal())
+}
+func (e *singleExpr) literal() string {
+	return fmt.Sprintf("%s %s", e.op.value, e.x.literal())
+}
+func (e *pipelineExpr) literal() string {
+	return fmt.Sprintf("%s|%s", e.x.literal(), e.y.literal())
+}
 
 // ----------------------------------------------------------------------------
 // Statements
@@ -214,40 +261,4 @@ func (s *blockDirect) append(x direct) {
 		s.body = &sectionDirect{}
 	}
 	s.body.list = append(s.body.list, x)
-}
-
-func (e *ident) literal() string {
-	return e.name.value
-}
-func (e *basicLit) literal() string {
-	return e.value.value
-}
-func (e *listExpr) literal() string {
-	var ts []string
-	for _, v := range e.list {
-		ts = append(ts, v.literal())
-	}
-
-	return strings.Join(ts, ",")
-}
-func (e *indexExpr) literal() string {
-
-	if e.op.value == "." {
-		return fmt.Sprintf("%s.%s", e.x.literal(), e.index.literal())
-	}
-
-	if e.op.value == "[" {
-		return fmt.Sprintf("%s[%s]", e.x.literal(), e.index.literal())
-	}
-
-	return "<indexExpr ParseError>"
-}
-func (e *callExpr) literal() string {
-	return fmt.Sprintf("%s(%s)", e.fn.literal(), e.args.literal())
-}
-func (e *binaryExpr) literal() string {
-	return fmt.Sprintf("%s %s %s", e.x.literal(), e.op.value, e.y.literal())
-}
-func (e *singleExpr) literal() string {
-	return fmt.Sprintf("%s %s", e.op.value, e.x.literal())
 }

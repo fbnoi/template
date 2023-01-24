@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	rank = map[string]int{
+	operatorRank = map[string]int{
 		".":   1,
 		"|":   2,
 		"*":   3,
@@ -84,11 +84,11 @@ func build(doc *Document, stream *tokenStream) error {
 }
 
 func compare(op1, op2 string) bool {
-	return rank[op1] <= rank[op2]
+	return operatorRank[op1] <= operatorRank[op2]
 }
 
 func allowOp(op *token) bool {
-	_, ok := rank[op.value]
+	_, ok := operatorRank[op.value]
 
 	return ok
 }
@@ -526,52 +526,77 @@ func (esb *exprSandbox) reset() {
 
 func (esb *exprSandbox) mergeExprsStack(tok *token) error {
 	if len(esb.exprsStack) < 2 {
-		return newUnexpectedToken(tok)
-	}
-	var expr1, expr2 = esb.exprsStack[len(esb.exprsStack)-1], esb.exprsStack[len(esb.exprsStack)-2]
-	switch tok.value {
-	case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or", "|":
-		esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
-		esb.exprsStack = append(esb.exprsStack, &binaryExpr{x: expr2, op: tok, y: expr1})
-
-	case "not", "++", "--":
-		esb.exprsStack[len(esb.exprsStack)-1] = &singleExpr{x: expr1, op: tok}
-
-	case "[", ".":
-		esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
-		esb.exprsStack = append(esb.exprsStack, &indexExpr{x: expr2, op: tok, index: expr1})
-
-	case ",":
 		var (
-			lExpr *listExpr
-			ok    bool
+			len1  = len(esb.exprsStack) - 1
+			expr1 = esb.exprsStack[len1]
 		)
-		if lExpr, ok = expr1.(*listExpr); ok {
-			lExpr.list = append([]expr{expr2}, lExpr.list...)
-		} else {
-			lExpr = &listExpr{}
-			lExpr.list = append(lExpr.list, expr1)
-			lExpr.list = append([]expr{expr2}, lExpr.list...)
+		switch tok.value {
+		case "not", "++", "--":
+			esb.exprsStack[len1] = &singleExpr{x: expr1, op: tok}
+
+		case "(":
+
+		default:
+			return newUnexpectedToken(tok)
 		}
-		esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-2]
-		esb.exprsStack = append(esb.exprsStack, lExpr)
 
-	case "(":
-		if fnExpr, ok := expr2.(*callExpr); ok {
-			if lExpr, ok := expr1.(*listExpr); ok {
-				fnExpr.args = lExpr
+		return nil
+	} else {
+		var (
+			len1  = len(esb.exprsStack) - 1
+			len2  = len1 - 1
+			expr1 = esb.exprsStack[len1]
+			expr2 = esb.exprsStack[len2]
+		)
+		switch tok.value {
 
+		case "+", "-", "*", "/", ">", "==", "<", ">=", "<=", "and", "or":
+			esb.exprsStack = esb.exprsStack[:len2]
+			esb.exprsStack = append(esb.exprsStack, &binaryExpr{x: expr2, op: tok, y: expr1})
+
+		case "not", "++", "--":
+			esb.exprsStack[len1] = &singleExpr{x: expr1, op: tok}
+
+		case "|":
+			esb.exprsStack = esb.exprsStack[:len2]
+			esb.exprsStack = append(esb.exprsStack, &pipelineExpr{x: expr2, y: expr1})
+
+		case "[", ".":
+			esb.exprsStack = esb.exprsStack[:len2]
+			esb.exprsStack = append(esb.exprsStack, &indexExpr{x: expr2, op: tok, index: expr1})
+
+		case ",":
+			var (
+				lExpr *listExpr
+				ok    bool
+			)
+			if lExpr, ok = expr1.(*listExpr); ok {
+				lExpr.list = append([]expr{expr2}, lExpr.list...)
 			} else {
 				lExpr = &listExpr{}
 				lExpr.list = append(lExpr.list, expr1)
-				fnExpr.args = lExpr
+				lExpr.list = append([]expr{expr2}, lExpr.list...)
 			}
-			esb.exprsStack = esb.exprsStack[:len(esb.exprsStack)-1]
+			esb.exprsStack = esb.exprsStack[:len2]
+			esb.exprsStack = append(esb.exprsStack, lExpr)
+
+		case "(":
+			if fnExpr, ok := expr2.(*callExpr); ok {
+				if lExpr, ok := expr1.(*listExpr); ok {
+					fnExpr.args = lExpr
+
+				} else {
+					lExpr = &listExpr{}
+					lExpr.list = append(lExpr.list, expr1)
+					fnExpr.args = lExpr
+				}
+				esb.exprsStack = esb.exprsStack[:len1]
+			}
+
+		default:
+			return newUnexpectedToken(tok)
+
 		}
-
-	default:
-		return newUnexpectedToken(tok)
-
 	}
 
 	return nil
