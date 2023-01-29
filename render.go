@@ -1,6 +1,13 @@
 package template
 
-import "io"
+import (
+	"io"
+	"path"
+)
+
+var (
+	config *Config
+)
 
 func Render(path string, writer io.Writer, ps Params) (err error) {
 	doc, err := buildFileTemplate(path)
@@ -30,4 +37,10 @@ func RenderView(tpl string, writer io.Writer, ps Params) (err error) {
 	_, err = writer.Write([]byte(body))
 
 	return
+}
+
+func resolvePath(p string) string {
+	p = path.Clean(p)
+
+	return p
 }
