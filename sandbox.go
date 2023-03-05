@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -190,7 +191,11 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 					return err
 				}
 				node.(*extendDirect).path = &basicLit{kind: tok.typ, value: tok}
-				if baseDoc, err := buildFileTemplate(trimString(tok.value)); err != nil {
+				path := trimString(tok.value)
+				if config != nil && config.TplDir != "" {
+					path = filepath.Join(config.TplDir, path)
+				}
+				if baseDoc, err := buildFileTemplate(path); err != nil {
 					return err
 				} else {
 					baseDoc.extended = true
@@ -204,7 +209,11 @@ func (sb *sandbox) build(doc *Document, stream *tokenStream) error {
 					return err
 				}
 				node.(*includeDirect).path = &basicLit{kind: tok.typ, value: tok}
-				if baseDoc, err = buildFileTemplate(trimString(tok.value)); err != nil {
+				path := trimString(tok.value)
+				if config != nil && config.TplDir != "" {
+					path = filepath.Join(config.TplDir, path)
+				}
+				if baseDoc, err = buildFileTemplate(path); err != nil {
 					return err
 				} else {
 					node.(*includeDirect).doc = baseDoc

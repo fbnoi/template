@@ -319,11 +319,13 @@ func (d *blockDirect) execute(p Params) (string, error) {
 		str string
 		err error
 	)
-	for _, v := range d.body.list {
-		if str, err = v.execute(p); err != nil {
-			return "", err
-		} else {
-			sb.WriteString(str)
+	if d.body != nil {
+		for _, v := range d.body.list {
+			if str, err = v.execute(p); err != nil {
+				return "", err
+			} else {
+				sb.WriteString(str)
+			}
 		}
 	}
 
